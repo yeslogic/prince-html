@@ -26,24 +26,21 @@ token_list *replacement_for_null_char(void)
 
 
 /*-----------------------------------------------------------------*/	
-/*returns 1 if target node is found with same name as end_tag_token_name, pointer stored in match_node*/
+/*returns 1 if an element node is found with the same name as element_name, pointer stored in match_node*/
 /*otherwise, return 0*/
-int has_element_in_scope(node *root, node *current_node, unsigned char *end_tag_token_name, node **match_node)
+int has_element_in_scope(element_stack *st, unsigned char *element_name, element_node **match_node)
 {	
 	element_node *temp_element_node;
-	
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
 
-	temp_element_node = (element_node *)current_node;
+	assert(element_name != NULL);
 
-	while((node *)temp_element_node != root)
+	while(st != NULL)
 	{
-		if(strcmp(temp_element_node->name, end_tag_token_name) == 0)
+		temp_element_node = open_element_stack_top(st);
+
+		if(strcmp(temp_element_node->name, element_name) == 0)
 		{
-			*match_node = (node *)temp_element_node;
+			*match_node = temp_element_node;
 			return 1;
 		}
 		else if(((temp_element_node->name_space == HTML) && (strcmp(temp_element_node->name, "applet") == 0)) ||
@@ -68,31 +65,28 @@ int has_element_in_scope(node *root, node *current_node, unsigned char *end_tag_
 		}
 		else
 		{
-			temp_element_node = (element_node *)temp_element_node->parent;
+			st = st->tail;
 		}
 	}
 	return 0;
 }
 
 /*-----------------------------------------------------------------*/	
-/*returns 1 if target node is found with same name as end_tag_token_name, pointer stored in match_node*/
+/*returns 1 if an element node is found with the same name as element_name, pointer stored in match_node*/
 /*otherwise, return 0*/
-int has_element_in_list_item_scope(node *root, node *current_node, unsigned char *end_tag_token_name, node **match_node)
+int has_element_in_list_item_scope(element_stack *st, unsigned char *element_name, element_node **match_node)
 {	
 	element_node *temp_element_node;
 
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
+	assert(element_name != NULL);
 
-	temp_element_node = (element_node *)current_node;
-
-	while((node *)temp_element_node != root)
+	while(st != NULL)
 	{
-		if(strcmp(temp_element_node->name, end_tag_token_name) == 0)
+		temp_element_node = open_element_stack_top(st);
+
+		if(strcmp(temp_element_node->name, element_name) == 0)
 		{
-			*match_node = (node *)temp_element_node;
+			*match_node = temp_element_node;
 			return 1;
 		}
 		else if(((temp_element_node->name_space == HTML) && (strcmp(temp_element_node->name, "applet") == 0)) ||
@@ -119,7 +113,7 @@ int has_element_in_list_item_scope(node *root, node *current_node, unsigned char
 		}
 		else
 		{
-			temp_element_node = (element_node *)temp_element_node->parent;
+			st = st->tail;
 		}
 	}
 	return 0;
@@ -127,24 +121,21 @@ int has_element_in_list_item_scope(node *root, node *current_node, unsigned char
 
 
 /*-----------------------------------------------------------------*/	
-/*returns 1 if target node is found with same name as end_tag_token_name, pointer stored in match_node*/
+/*returns 1 if an element node is found with the same name as element_name, pointer stored in match_node*/
 /*otherwise, return 0*/
-int has_element_in_button_scope(node *root, node *current_node, unsigned char *end_tag_token_name, node **match_node)
-{	
+int has_element_in_button_scope(element_stack *st, unsigned char *element_name, element_node **match_node)
+{
 	element_node *temp_element_node;
-	
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
 
-	temp_element_node = (element_node *)current_node;
+	assert(element_name != NULL);
 
-	while((node *)temp_element_node != root)
+	while(st != NULL)
 	{
-		if(strcmp(temp_element_node->name, end_tag_token_name) == 0)
+		temp_element_node = open_element_stack_top(st);
+
+		if(strcmp(temp_element_node->name, element_name) == 0)
 		{
-			*match_node = (node *)temp_element_node;
+			*match_node = temp_element_node;
 			return 1;
 		}
 		else if(((temp_element_node->name_space == HTML) && (strcmp(temp_element_node->name, "applet") == 0)) ||
@@ -170,7 +161,7 @@ int has_element_in_button_scope(node *root, node *current_node, unsigned char *e
 		}
 		else
 		{
-			temp_element_node = (element_node *)temp_element_node->parent;
+			st = st->tail;
 		}
 	}
 	return 0;
@@ -178,24 +169,21 @@ int has_element_in_button_scope(node *root, node *current_node, unsigned char *e
 
 
 /*-----------------------------------------------------------------*/	
-/*returns 1 if target node is found with same name as end_tag_token_name, pointer stored in match_node*/
+/*returns 1 if an element node is found with the same name as element_name, pointer stored in match_node*/
 /*otherwise, return 0*/
-int has_element_in_table_scope(node *root, node *current_node, unsigned char *end_tag_token_name, node **match_node)
+int has_element_in_table_scope(element_stack *st, unsigned char *element_name, element_node **match_node)
 {	
 	element_node *temp_element_node;
-	
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
 
-	temp_element_node = (element_node *)current_node;
+	assert(element_name != NULL);
 
-	while((node *)temp_element_node != root)
+	while(st != NULL)
 	{
-		if(strcmp(temp_element_node->name, end_tag_token_name) == 0)
+		temp_element_node = open_element_stack_top(st);
+
+		if(strcmp(temp_element_node->name, element_name) == 0)
 		{
-			*match_node = (node *)temp_element_node;
+			*match_node = temp_element_node;
 			return 1;
 		}
 		else if(((temp_element_node->name_space == HTML) && (strcmp(temp_element_node->name, "html") == 0)) ||
@@ -205,7 +193,7 @@ int has_element_in_table_scope(node *root, node *current_node, unsigned char *en
 		}
 		else
 		{
-			temp_element_node = (element_node *)temp_element_node->parent;
+			st = st->tail;
 		}
 	}
 		
@@ -213,31 +201,29 @@ int has_element_in_table_scope(node *root, node *current_node, unsigned char *en
 }
 
 /*-----------------------------------------------------------------*/	
-/*returns 1 if target node is found with same name as end_tag_token_name, pointer stored in match_node*/
+/*returns 1 if an element node is found with the same name as element_name, pointer stored in match_node*/
 /*otherwise, return 0*/
-int has_element_in_select_scope(node *root, node *current_node, unsigned char *end_tag_token_name, node **match_node)
+int has_element_in_select_scope(element_stack *st, unsigned char *element_name, element_node **match_node)
 {	
 	element_node *temp_element_node;
-	
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
 
-	temp_element_node = (element_node *)current_node;
+	assert(element_name != NULL);
 
-	while((node *)temp_element_node != root)
+	while(st != NULL)
 	{
-		if(strcmp(temp_element_node->name, end_tag_token_name) == 0)
+		temp_element_node = open_element_stack_top(st);
+
+		if(strcmp(temp_element_node->name, element_name) == 0)
 		{
-			*match_node = (node *)temp_element_node;
+
+			*match_node = temp_element_node;
 			return 1;
 		}
 		else if(((temp_element_node->name_space == HTML) && (strcmp(temp_element_node->name, "optgroup") == 0)) ||
 				((temp_element_node->name_space == HTML) && (strcmp(temp_element_node->name, "option") == 0)))
 	
 		{
-			temp_element_node = (element_node *)temp_element_node->parent;
+			st = st->tail;
 		}
 		else
 		{
@@ -357,16 +343,13 @@ int is_in_special_category(element_node *e)
 	}
 }
 /*-----------------------------------------------------------------*/
-node *generate_implied_end_tags(node *current_node)
+element_node *generate_implied_end_tags(element_stack **st_ptr)
 {
 	element_node *curr_element_node;
 
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
-
-	curr_element_node = (element_node *)current_node;
+	assert(*st_ptr != NULL);
+	
+	curr_element_node = open_element_stack_top(*st_ptr);
 
 	if((strcmp(curr_element_node->name, "dd") == 0) ||
 	   (strcmp(curr_element_node->name, "dt") == 0) ||
@@ -377,75 +360,95 @@ node *generate_implied_end_tags(node *current_node)
 	   (strcmp(curr_element_node->name, "rp") == 0) ||
 	   (strcmp(curr_element_node->name, "rt") == 0))
 	{
-		return current_node->parent;
+		open_element_stack_pop(st_ptr);
 	}
-	else
-	{
-		return current_node;
-	}
+
+	return open_element_stack_top(*st_ptr);
 }
 
 /*-----------------------------------------------------------------*/
-void add_child_to_foster_parent(node *root, node *current_node, node *child_node)
+void add_child_to_foster_parent(element_stack *o_e_st, node *child_node)
 {
-	element_node *curr_element;
+	element_node *temp_element;
+	element_stack *temp_stack = o_e_st;
 
-	assert(current_node != NULL);
+	assert(child_node != NULL);
 	
-	if(current_node->type != ELEMENT_N)
+	while(temp_stack != NULL)
 	{
-		current_node = current_node->parent;
-	}
+		temp_element = open_element_stack_top(temp_stack);
 
-	while(current_node != root)
-	{
-		curr_element = (element_node *)current_node;
-
-		if(strcmp(curr_element->name, "table") == 0)
+		if(strcmp(temp_element->name, "table") == 0)
 		{
-			insert_child_node(current_node->parent, child_node, current_node);
+			if(child_node->type == TEXT_N)
+			{
+				if((temp_element->previous_sibling != NULL) && 
+				   (temp_element->previous_sibling->type == TEXT_N))
+				{
+					int len;
+					unsigned char *str1;
+					text_node *t1 = (text_node *)temp_element->previous_sibling;
+					text_node *t2 = (text_node *)child_node;
+
+					str1 = t1->text_data;
+
+					len = strlen(t1->text_data) + strlen(t2->text_data);	//text_data is never NULL.
+
+					t1->text_data = malloc(len + 1);
+
+					t1->text_data = strcpy(t1->text_data, str1);
+					t1->text_data = strcat(t1->text_data, t2->text_data);
+	
+					free(str1);
+					free_node(child_node);
+				}
+				else
+				{
+					insert_child_node(temp_element->parent, child_node, (node *)temp_element);
+				}
+			}
+			else if(child_node->type == ELEMENT_N)
+			{
+				insert_child_node(temp_element->parent, child_node, (node *)temp_element);
+			}
+			else
+			{
+				;
+			}
 			break;
 		}
-		else if(strcmp(curr_element->name, "html") == 0)
+		else if(strcmp(temp_element->name, "html") == 0)
 		{
-			add_child_node(current_node, child_node);
+			add_child_node(temp_element, child_node);
 			break;
 		}
 		else
 		{
-			current_node = current_node ->parent;
+			temp_stack = previous_stack_node(temp_stack);
 		}
 	}
 }
 
 
 /*-----------------------------------------------------------------*/
- //current_node must not be root node of the tree.
-//function returns the first "table" node in the upward path from the current node,
-//or returns the html node, if no "table" node is found.
-node *back_to_table_context(node *root, node *current_node)
+//function returns the first "table" element seen on the stack, or the "html" element if no "table" is found.
+//it is unlikely to return a NULL. (no need for caller to check for NULL return value)
+element_node *back_to_table_context(element_stack **st_ptr)
 {
  	element_node *temp_element_node;
-
-	assert(current_node != root);
-	
-	if(current_node->type != ELEMENT_N)
+				
+	while(*st_ptr != NULL)
 	{
-		current_node = current_node->parent;
-	}
-					
-	while(current_node != root)
-	{
-		temp_element_node = (element_node *)current_node;
+		temp_element_node = open_element_stack_top(*st_ptr);
 
 		if((strcmp(temp_element_node->name, "table") == 0)||
 		   (strcmp(temp_element_node->name, "html") == 0))
 		{
-			return current_node;
+			return temp_element_node;
 		}
 		else
 		{
-			current_node = current_node->parent;
+			open_element_stack_pop(st_ptr);
 		}
 	}
 	
@@ -454,33 +457,27 @@ node *back_to_table_context(node *root, node *current_node)
 
 
 /*-----------------------------------------------------------------*/
-//current_node must not be root node of the tree.
-//function returns the first "tbody", "tfoot", or "thead" node in the upward path from the current node,
-//or returns the html node, if none of the above nodes is found.
-node *back_to_table_body_context(node *root, node *current_node)
+//function returns the first "tbody", "tfoot", or "thead" element seen on the stack. 
+//or the "html" element if none of the above elements is found.
+//it is unlikely to return a NULL. (no need for caller to check for NULL return value)
+element_node *back_to_table_body_context(element_stack **st_ptr)
 {
  	element_node *temp_element_node;
 
-	assert(current_node != root);					
-	if(current_node->type != ELEMENT_N)
+	while(*st_ptr != NULL)
 	{
-		current_node = current_node->parent;
-	}
-					
-	while(current_node != root)
-	{
-		temp_element_node = (element_node *)current_node;
+		temp_element_node = open_element_stack_top(*st_ptr);
 
 		if((strcmp(temp_element_node->name, "tbody") == 0)||
 		   (strcmp(temp_element_node->name, "tfoot") == 0)||
 		   (strcmp(temp_element_node->name, "thead") == 0)||
 		   (strcmp(temp_element_node->name, "html") == 0))
 		{
-			return current_node;
+			return temp_element_node;
 		}
 		else
 		{
-			current_node = current_node->parent;
+			open_element_stack_pop(st_ptr);
 		}
 	}
 	
@@ -488,32 +485,24 @@ node *back_to_table_body_context(node *root, node *current_node)
 }
 
 /*-----------------------------------------------------------------*/
-//current_node must not be root node of the tree.
-//function returns the first "tr" node in the upward path from the current node,
-//or returns the html node, if no "tr" node is found.
-node *back_to_table_row_context(node *root, node *current_node)
+//function returns the first "tr" element seen on the stack. or the "html" element, if no "tr" element is found.
+//it is unlikely to return a NULL. (no need for caller to check for NULL return value)
+element_node *back_to_table_row_context(element_stack **st_ptr)
 {
-	element_node *temp_element_node;
+ 	element_node *temp_element_node;
 
-	assert(current_node != root);
-	
-	if(current_node->type != ELEMENT_N)
+	while((*st_ptr) != NULL)
 	{
-		current_node = current_node->parent;
-	}
-					
-	while(current_node != root)
-	{
-		temp_element_node = (element_node *)current_node;
+		temp_element_node = open_element_stack_top(*st_ptr);
 
 		if((strcmp(temp_element_node->name, "tr") == 0)||
 		   (strcmp(temp_element_node->name, "html") == 0))
 		{
-			return current_node;
+			return temp_element_node;
 		}
 		else
 		{
-			current_node = current_node->parent;
+			open_element_stack_pop(st_ptr);
 		}
 	}
 	
@@ -523,35 +512,28 @@ node *back_to_table_row_context(node *root, node *current_node)
 
 
 /*-----------------------------------------------------------------*/
-/*returns the element node that has the name node_name and is located between current_node and root*/
-/*returns NULL if no such element exists, or node_name is NULL*/
-element_node *get_node_by_name(node *root, node *current_node, unsigned char *node_name)
+/*returns the element node that has the name element_name in the stack*/
+/*returns NULL if no such element exists*/
+element_node *get_node_by_name(element_stack *st, unsigned char *element_name)
 {
-	element_node *curr_element_node;
-	
-	if(node_name == NULL)
-	{
-		return NULL;
-	}
+	element_node *e;
 
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
+	assert(element_name != NULL);
 
-	while(current_node != root)
+	while(st != NULL)
 	{
-		curr_element_node = (element_node *)current_node;
+		e = open_element_stack_top(st);
 
-		if(strcmp(curr_element_node->name, node_name) == 0)
-		{	
-			return curr_element_node;
+		if(strcmp(e->name, element_name) == 0)
+		{
+			return e;
 		}
 
-		current_node = current_node->parent;
+		st = previous_stack_node(st);
 	}
 
 	return NULL;
+
 }
 
 

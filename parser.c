@@ -1,11 +1,10 @@
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include "parser.h"
 #include "util.h"
 #include "format.h"
-
 
 
 
@@ -229,11 +228,10 @@ void after_after_frameset_mode(token *tk);
   in the fragment case: "starting_node" should be "html" node.
 						"staring_state" and "starting_mode" should be determined by the "context" element.
 */
-void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, node *starting_node,
+void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element_node *starting_node,
 						 tokenization_state starting_state, insertion_mode starting_mode);
 
-
-insertion_mode reset_insertion_mode(node *root, node *current_node);
+insertion_mode reset_insertion_mode(element_stack *st);
 insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name);
 
 
@@ -344,9 +342,10 @@ void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (token *tk) = {
 tokenization_state current_state;
 insertion_mode original_insertion_mode;
 insertion_mode current_mode;
-node *current_node;
+element_node *current_node;
 element_node *form_element_ptr = NULL, *head_element_ptr = NULL;
 active_formatting_list *active_formatting_elements = NULL;
+element_stack *o_e_stack = NULL;
 
 character_consumption_type character_consumption = NOT_RECONSUME;
 token_process_type token_process = NOT_REPROCESS;
@@ -403,7 +402,7 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 
 	doc_root = create_element_node("DOC", NULL, HTML);
 	html_node = create_element_node("html", NULL, HTML);
-	add_child_node((node *)doc_root, (node *)html_node);
+	add_child_node(doc_root, (node *)html_node);
 
 	form_element_ptr = NULL;
 
@@ -439,7 +438,7 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 
 	start_mode = reset_insertion_mode_fragment(context);
 
-	html_parse_memory_1(string_buffer, string_length, (node *)html_node, start_state, start_mode);
+	html_parse_memory_1(string_buffer, string_length, html_node, start_state, start_mode);
 
 	*root_ptr = (node *)doc_root;
 	
@@ -453,7 +452,7 @@ void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **ro
 	//create a document root element
 	doc_root = create_element_node("DOC", NULL, HTML);
 
-	html_parse_memory_1(file_buffer, buffer_length, (node *)doc_root, DATA_STATE, INITIAL);
+	html_parse_memory_1(file_buffer, buffer_length, doc_root, DATA_STATE, INITIAL);
 	
 	*root_ptr = (node *)doc_root;
 	*doctype_ptr = doc_type;
@@ -470,7 +469,7 @@ void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **ro
   in the fragment case: "starting_node" should be "html" node.
 						"staring_state" and "starting_mode" should be determined by the "context" element.
 */
-void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, node *starting_node,
+void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element_node *starting_node,
 						tokenization_state starting_state, insertion_mode starting_mode)
 {
 	unsigned char *curr_char;
@@ -4331,7 +4330,7 @@ void initial_mode(token *tk)
 			//append comment node to Document object
 			{
 				comment_node *c = create_comment_node(tk->cmt.comment);
-				add_child_node(current_node, (node *)c);
+				add_child_node(current_node, (node *)c);	//current_node is doc_root at this point.
 			}
 			break;
 		case TOKEN_DOCTYPE:
@@ -4391,8 +4390,10 @@ void before_html_mode(token *tk)
 				{
 					//create an html element, append it to the Document object, 
 					element_node *e = create_element_node("html", NULL, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					add_child_node(current_node, (node *)e);	//current_node is doc_root at this point.
+					//current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = BEFORE_HEAD;
 					token_process = REPROCESS;
@@ -4404,7 +4405,7 @@ void before_html_mode(token *tk)
 			//append comment node to Document object
 			{
 				comment_node *c = create_comment_node(tk->cmt.comment);
-				add_child_node(current_node, (node *)c);
+				add_child_node(current_node, (node *)c);	//current_node is doc_root at this point.
 			}
 			break;
 		case TOKEN_DOCTYPE:
@@ -4417,15 +4418,19 @@ void before_html_mode(token *tk)
 				{	
 					//create an html element, append it to the Document object, 
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					add_child_node(current_node, (node *)e);	//current_node is doc_root at this point.
+					//current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 				}
 				else
 				{
 					element_node *e = create_element_node("html", NULL, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					add_child_node(current_node, (node *)e);	//current_node is doc_root at this point.
+					//current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 					token_process = REPROCESS;
 				}
@@ -4441,8 +4446,10 @@ void before_html_mode(token *tk)
 				   (strcmp(tk->ett.tag_name, "br") == 0))
 				{
 					element_node *e = create_element_node("html", NULL, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					add_child_node(current_node, (node *)e);	//current_node is doc_root at this point.
+					//current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = BEFORE_HEAD;
 					token_process = REPROCESS;
@@ -4458,8 +4465,10 @@ void before_html_mode(token *tk)
 		default:
 			{
 				element_node *e = create_element_node("html", NULL, HTML);
-				add_child_node(current_node, (node *)e);
-				current_node = (node *)e;
+				add_child_node(current_node, (node *)e);	//current_node is doc_root at this point.
+				//current_node = (node *)e;
+				open_element_stack_push(&o_e_stack, e);
+				current_node = open_element_stack_top(o_e_stack);
 
 				current_mode = BEFORE_HEAD;
 				token_process = REPROCESS;
@@ -4488,7 +4497,9 @@ void before_head_mode(token *tk)
 				{
 					element_node *e = create_element_node("head", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_HEAD;
 					token_process = REPROCESS;
@@ -4520,7 +4531,9 @@ void before_head_mode(token *tk)
 					
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					head_element_ptr = e;
 
@@ -4530,7 +4543,9 @@ void before_head_mode(token *tk)
 				{
 					element_node *e = create_element_node("head", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					head_element_ptr = e;
 
@@ -4548,7 +4563,9 @@ void before_head_mode(token *tk)
 				{
 					element_node *e = create_element_node("head", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					head_element_ptr = e;
 
@@ -4565,7 +4582,9 @@ void before_head_mode(token *tk)
 			{
 				element_node *e = create_element_node("head", NULL, HTML);
 				add_child_node(current_node, (node *)e);
-				current_node = (node *)e;
+				//current_node = (node *)e; 
+				open_element_stack_push(&o_e_stack, e); 
+				current_node = open_element_stack_top(o_e_stack);
 
 				head_element_ptr = e;
 
@@ -4598,7 +4617,9 @@ void in_head_mode(token *tk)
 					//Act as if an end tag token with the tag name "head" had been seen, 
 					//and reprocess the current token.
 
-					current_node = current_node->parent;
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = AFTER_HEAD;
 					token_process = REPROCESS;	
@@ -4648,7 +4669,9 @@ void in_head_mode(token *tk)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = RCDATA_STATE;
 					original_insertion_mode = current_mode;
@@ -4662,7 +4685,9 @@ void in_head_mode(token *tk)
 
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = RAWTEXT_STATE;
 					original_insertion_mode = current_mode;
@@ -4672,7 +4697,9 @@ void in_head_mode(token *tk)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_HEAD_NOSCRIPT;
 				}
@@ -4680,7 +4707,9 @@ void in_head_mode(token *tk)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = SCRIPT_DATA_STATE;
 					original_insertion_mode = current_mode;
@@ -4696,7 +4725,10 @@ void in_head_mode(token *tk)
 				{
 					//Act as if an end tag token with the tag name "head" had been seen, 
 					//and reprocess the current token
-					current_node = current_node->parent;
+
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = AFTER_HEAD;
 					token_process = REPROCESS;
@@ -4710,15 +4742,20 @@ void in_head_mode(token *tk)
 				   (strcmp(tk->ett.tag_name, "br") == 0))
 				{
 					//Act as if an end tag token with the tag name "head" had been seen, 
-					//and reprocess the current token.	
-					current_node = current_node->parent;
+					//and reprocess the current token.
+					
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = AFTER_HEAD;
 					token_process = REPROCESS;
 				}
 				else if(strcmp(tk->ett.tag_name, "head") == 0)
 				{
-					current_node = current_node->parent;
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
 					current_mode = AFTER_HEAD;
 				}
 				else
@@ -4734,7 +4771,10 @@ void in_head_mode(token *tk)
 			//Act as if an end tag token with the tag name "head" had been seen, 
 			//and reprocess the current token.
 			{
-				current_node = current_node->parent;
+				//current_node = current_node->parent; 
+				open_element_stack_pop(&o_e_stack); 
+				current_node = open_element_stack_top(o_e_stack);
+
 				current_mode = AFTER_HEAD;
 				token_process = REPROCESS;	
 			}
@@ -4761,7 +4801,10 @@ void in_head_noscript_mode(token *tk)
 				else
 				{
 					//parse error
-					current_node = current_node->parent;
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
+
 					current_mode = IN_HEAD;
 					token_process = REPROCESS;
 				}
@@ -4802,7 +4845,10 @@ void in_head_noscript_mode(token *tk)
 				else
 				{
 					//parse error
-					current_node = current_node->parent;
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
+
 					current_mode = IN_HEAD;
 					token_process = REPROCESS;
 				}
@@ -4812,12 +4858,18 @@ void in_head_noscript_mode(token *tk)
 			{
 				if(strcmp(tk->ett.tag_name, "noscript") == 0)
 				{
-					current_node = current_node->parent;
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
+
 					current_mode = IN_HEAD;
 				}
 				if(strcmp(tk->ett.tag_name, "br") == 0)
 				{
-					current_node = current_node->parent;
+					//current_node = current_node->parent; 
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
+
 					current_mode = IN_HEAD;
 					token_process = REPROCESS;
 				}
@@ -4830,7 +4882,10 @@ void in_head_noscript_mode(token *tk)
 		default:
 			{
 				//parse error
-				current_node = current_node->parent;
+				//current_node = current_node->parent; 
+				open_element_stack_pop(&o_e_stack); 
+				current_node = open_element_stack_top(o_e_stack);
+
 				current_mode = IN_HEAD;
 				token_process = REPROCESS;
 			}
@@ -4859,7 +4914,9 @@ void after_head_mode(token *tk)
 					//frameset-ok flag back to "ok", and then reprocess the current token.
 					element_node *e = create_element_node("body", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -4890,7 +4947,9 @@ void after_head_mode(token *tk)
 					//Switch the insertion mode to "in body ".
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_BODY;
 				}
@@ -4898,7 +4957,9 @@ void after_head_mode(token *tk)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 					
 					current_mode = IN_FRAMESET;
 				}
@@ -4915,11 +4976,13 @@ void after_head_mode(token *tk)
 					
 					if(head_element_ptr != NULL)	//The head element pointer cannot be null at this point. (checking is for double-insurance)
 					{
-						current_node = (node *)head_element_ptr;
+						open_element_stack_push(&o_e_stack, head_element_ptr); 
+						current_node = open_element_stack_top(o_e_stack);
 
 						in_head_mode(tk);
 
-						current_node = head_element_ptr->parent;
+						remove_element_from_stack(&o_e_stack, head_element_ptr);
+						current_node = open_element_stack_top(o_e_stack);
 					}
 				}
 				else if((strcmp(tk->stt.tag_name, "noframes") == 0) ||
@@ -4930,11 +4993,16 @@ void after_head_mode(token *tk)
 					//parse error
 					//Push the node pointed to by the head element pointer onto the stack of open elements .
 					//Process the token using the rules for the "in head " insertion mode .
+					//Remove the node pointed to by the head element pointer from the stack of open elements 
 					if(head_element_ptr != NULL)	//The head element pointer cannot be null at this point. (checking is for double-insurance)
 					{
-						current_node = (node *)head_element_ptr;
+						open_element_stack_push(&o_e_stack, head_element_ptr); 
+						current_node = open_element_stack_top(o_e_stack);
 
 						in_head_mode(tk);
+
+						remove_element_from_stack(&o_e_stack, head_element_ptr);
+						current_node = open_element_stack_top(o_e_stack);
 					}
 				}
 				else if(strcmp(tk->stt.tag_name, "head") == 0)
@@ -4949,7 +5017,9 @@ void after_head_mode(token *tk)
 
 					element_node *e = create_element_node("body", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -4968,7 +5038,9 @@ void after_head_mode(token *tk)
 
 					element_node *e = create_element_node("body", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					//current_node = (node *)e; 
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -4988,7 +5060,10 @@ void after_head_mode(token *tk)
 			{
 				element_node *e = create_element_node("body", NULL, HTML);
 				add_child_node(current_node, (node *)e);
-				current_node = (node *)e;
+				//current_node = (node *)e; 
+				open_element_stack_push(&o_e_stack, e); 
+				current_node = open_element_stack_top(o_e_stack);
+
 				current_mode = IN_BODY;
 				token_process = REPROCESS;
 			}
@@ -4997,6 +5072,7 @@ void after_head_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
+/*=======================BEGINNING OF IN BODY MODE==================================*/
 void in_body_mode(token *tk)
 {
 
@@ -5017,13 +5093,12 @@ void in_body_mode(token *tk)
 						(tk->cht.ch == SPACE))
 				{
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//insert the character into the current node
-
-					if(current_node->type == TEXT_N)
+					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node;
+						text_node *t = (text_node *)current_node->last_child;
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 					}
 					else
@@ -5031,20 +5106,18 @@ void in_body_mode(token *tk)
 						text_node *t = create_text_node();
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 						add_child_node(current_node, (node *)t);
-						current_node = (node *)t;
 					}
 				}
 				else
 				{
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 					
 					//Insert the token's character into the current node .
 					//Set the frameset-ok flag to "not ok".
-
-					if(current_node->type == TEXT_N)
+					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node;
+						text_node *t = (text_node *)current_node->last_child;
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 					}
 					else
@@ -5052,7 +5125,6 @@ void in_body_mode(token *tk)
 						text_node *t = create_text_node();
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 						add_child_node(current_node, (node *)t);
-						current_node = (node *)t;
 					}
 
 				}
@@ -5062,31 +5134,15 @@ void in_body_mode(token *tk)
 		case TOKEN_COMMENT:
 			{
 				comment_node *c = create_comment_node(tk->cmt.comment);
-
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-			
 				add_child_node(current_node, (node *)c);
-
 			}
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
-			if(current_node->type == TEXT_N)
-			{
-				current_node = current_node->parent;
-			}
 			break;
 		case TOKEN_START_TAG:
 			{	
-
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
 
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{					
@@ -5094,7 +5150,7 @@ void in_body_mode(token *tk)
 					//For each attribute on the token, check to see if the attribute 
 					//is already present on the top element of the stack of open elements . 
 					//If it is not, add the attribute and its corresponding value to that element
-					element_node *html_node = get_node_by_name((node *)doc_root, current_node, "html");
+					element_node *html_node = get_node_by_name(o_e_stack, "html");
 
 					if(html_node != NULL)
 					{
@@ -5137,7 +5193,7 @@ void in_body_mode(token *tk)
 					//set the frameset-ok flag to "not ok"
 					//for each attribute on the token, check to see if the attribute is already present
 					//on the body element if it is not, add the attribute and its corresponding value to that element.
-					element_node *body_node = get_node_by_name((node *)doc_root, current_node, "body");
+					element_node *body_node = get_node_by_name(o_e_stack, "body");
 					attribute_list *curr_token_attrs = tk->stt.attributes;
 
 					if(body_node != NULL)
@@ -5191,16 +5247,25 @@ void in_body_mode(token *tk)
 					//If the stack of open elements has a p element in button scope , 
 					//then act as if an end tag with the tag name "p" had been seen.
 					//Insert an HTML element for the token.
-					node *match_node;
+					element_node *match_node;
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 				}
 				else if((strcmp(tk->stt.tag_name, "h1") == 0) ||
@@ -5216,33 +5281,37 @@ void in_body_mode(token *tk)
 					//one of "h1", "h2", "h3", "h4", "h5", or "h6", 
 					//then this is a parse error ; pop the current node off the stack of open elements .
 					//Insert an HTML element for the token.
-					node *match_node;
+					element_node *match_node;
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
-					if(current_node->type == ELEMENT_N)
+					if((strcmp(current_node->name, "h1") == 0) ||
+					   (strcmp(current_node->name, "h2") == 0) ||
+					   (strcmp(current_node->name, "h3") == 0) ||
+					   (strcmp(current_node->name, "h4") == 0) ||
+					   (strcmp(current_node->name, "h5") == 0) ||
+					   (strcmp(current_node->name, "h6") == 0))
 					{
-						element_node *curr_e = (element_node *)current_node;
-						
-						if((strcmp(curr_e->name, "h1") == 0) ||
-						   (strcmp(curr_e->name, "h2") == 0) ||
-						   (strcmp(curr_e->name, "h3") == 0) ||
-						   (strcmp(curr_e->name, "h4") == 0) ||
-						   (strcmp(curr_e->name, "h5") == 0) ||
-						   (strcmp(curr_e->name, "h6") == 0))
-						{
-							//parse error;
-							current_node = current_node->parent;
-						}
-
+						//parse error;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 				}
 				else if((strcmp(tk->stt.tag_name, "pre") == 0) ||
@@ -5250,17 +5319,26 @@ void in_body_mode(token *tk)
 				{
 					//If the stack of open elements has a p element in button scope ,
 					//then act as if an end tag with the tag name "p" had been seen.
-					node *match_node;
+					element_node *match_node;
 					element_node *e;
 
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 										
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					//If the next token is a U+000A LINE FEED (LF) character token, 
 					//then ignore that token and move on to the next one. 
@@ -5279,17 +5357,26 @@ void in_body_mode(token *tk)
 						//If the stack of open elements has a p element in button scope , then act as if an end tag 
 						//with the tag name "p" had been seen.
 						
-						node *match_node;
+						element_node *match_node;
 						element_node *e;
 
-						if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+						if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 						{
-							current_node = match_node->parent;
+							pop_elements_up_to(&o_e_stack, "p");
+							current_node = open_element_stack_top(o_e_stack);
 						}
 					
 						e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-						add_child_node(current_node, (node *)e);
-						current_node = (node *)e;
+						if(apply_foster_parenting == 1)
+						{
+							add_child_to_foster_parent(o_e_stack, (node *)e);
+						}
+						else
+						{
+							add_child_node(current_node, (node *)e);
+						}
+						open_element_stack_push(&o_e_stack, e); 
+						current_node = open_element_stack_top(o_e_stack);
 
 						//set the form element pointer to point to the element created.
 						form_element_ptr = e;
@@ -5299,20 +5386,17 @@ void in_body_mode(token *tk)
 				{
 					//Set the frameset-ok flag to "not ok".
 					element_node *e;
-					node *match_node, *temp_node = current_node;
+					element_node *match_node, *temp_element;
+					element_stack *temp_stack = o_e_stack;
 
-					if(temp_node->type != ELEMENT_N)
+					while(temp_stack != NULL)
 					{
-						temp_node = temp_node->parent;
-					}
-
-					while(temp_node != (node *)doc_root)
-					{
-						element_node *temp_element = (element_node *)temp_node;
+						temp_element = open_element_stack_top(temp_stack);
 
 						if(strcmp(temp_element->name, "li") == 0)
 						{
-							current_node = temp_node->parent;
+							pop_elements_up_to(&o_e_stack, "li");
+							current_node = open_element_stack_top(o_e_stack);
 							break;
 						}
 						
@@ -5321,45 +5405,51 @@ void in_body_mode(token *tk)
 						   (strcmp(temp_element->name, "div") != 0) &&
 						   (strcmp(temp_element->name, "p") != 0))
 						{
-							current_node = temp_node;
 							break;
 						}
 
-						temp_node = temp_node->parent;
+						temp_stack = previous_stack_node(temp_stack);
 					}
 
 					//if the stack of open elements has a p element in button scope , then act as if an end tag 
 					//with the tag name "p" had been seen.	
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 					
 				}
 				else if((strcmp(tk->stt.tag_name, "dd") == 0) ||
 						(strcmp(tk->stt.tag_name, "dt") == 0))
+			
 				{
 					//Set the frameset-ok flag to "not ok".
 					element_node *e;
-					node *match_node, *temp_node = current_node;
+					element_node *match_node, *temp_element;
+					element_stack *temp_stack = o_e_stack;
 
-					if(temp_node->type != ELEMENT_N)
+					while(temp_stack != NULL)
 					{
-						temp_node = temp_node->parent;
-					}
-
-					while(temp_node != (node *)doc_root)
-					{
-						element_node *temp_element = (element_node *)temp_node;
+						temp_element = open_element_stack_top(temp_stack);
 
 						if((strcmp(temp_element->name, "dd") == 0) ||
 						   (strcmp(temp_element->name, "dt") == 0))
 						{
-							current_node = temp_node->parent;
+							pop_elements_up_to(&o_e_stack, temp_element->name);
+							current_node = open_element_stack_top(o_e_stack);
 							break;
 						}
 						
@@ -5368,66 +5458,91 @@ void in_body_mode(token *tk)
 						   (strcmp(temp_element->name, "div") != 0) &&
 						   (strcmp(temp_element->name, "p") != 0))
 						{
-							current_node = temp_node;
 							break;
 						}
 
-						temp_node = temp_node->parent;
+						temp_stack = previous_stack_node(temp_stack);
 					}
 
 					//if the stack of open elements has a p element in button scope , then act as if an end tag 
 					//with the tag name "p" had been seen.	
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 				}
 				else if(strcmp(tk->stt.tag_name, "plaintext") == 0)
 				{
 					//If the stack of open elements has a p element in button scope ,
 					//then act as if an end tag with the tag name "p" had been seen.
-					node *match_node;
+					element_node *match_node;
 					element_node *e;
 
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = PLAINTEXT_STATE;
 				}
 				else if(strcmp(tk->stt.tag_name, "button") == 0)
 				{
 					element_node *e;
-					node *match_node;
-					if(has_element_in_scope((node *)doc_root, current_node, "button", &match_node) == 1)
+					element_node *match_node;
+					if(has_element_in_scope(o_e_stack, "button", &match_node) == 1)
 					{
 						//parse error
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "button");
+						current_node = open_element_stack_top(o_e_stack);
+
 						token_process = REPROCESS;
 					}
 					else
 					{
 						//Reconstruct the active formatting elements, if any.
-						current_node = reconstruct_active_formatting_elements(active_formatting_elements, 
-																			  (node *)doc_root, current_node);
+						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 						//Insert an HTML element for the token.
 						e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-						add_child_node(current_node, (node *)e);
-						current_node = (node *)e;
+						if(apply_foster_parenting == 1)
+						{
+							add_child_to_foster_parent(o_e_stack, (node *)e);
+						}
+						else
+						{
+							add_child_node(current_node, (node *)e);
+						}
+						open_element_stack_push(&o_e_stack, e);
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Set the frameset-ok flag to "not ok".
-						
 					}
 
 				}
@@ -5435,7 +5550,6 @@ void in_body_mode(token *tk)
 				{
 					element_node *element_to_be_removed;
 					element_node *e;
-					node *temp_node;
 
 					if(get_formatting_element(active_formatting_elements, "a") != NULL)
 					{
@@ -5443,7 +5557,8 @@ void in_body_mode(token *tk)
 						//act as if an end tag with the tag name "a" had been seen:
 
 						/*----------------------Adoption Agency Algorithm-------------------------------------*/
-						adoption_agency_algorithm((node *)doc_root, &active_formatting_elements, &current_node, "a");
+
+						adoption_agency_algorithm(&active_formatting_elements, &o_e_stack, &current_node, "a");
 
 						/*------------------------------------------------------------------------------------*/
 						//then remove that element from the list of active formatting elements and the stack of open elements if the end tag didn't
@@ -5454,31 +5569,27 @@ void in_body_mode(token *tk)
 						{
 							active_formatting_elements =
 								remove_element_from_active_formatting_list(active_formatting_elements, element_to_be_removed);
+
+							remove_element_from_stack(&o_e_stack, element_to_be_removed);
+							current_node = open_element_stack_top(o_e_stack);
 						}
-
-						temp_node = current_node;
-						while(temp_node != (node *)doc_root)
-						{
-							element_to_be_removed = (element_node *)temp_node;
-
-							if(strcmp(element_to_be_removed->name, "a") == 0)
-							{
-								current_node = element_to_be_removed->parent;
-							}
-
-							temp_node = temp_node->parent;
-						}
-	
 					}
 		
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  
-																			(node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Insert an HTML element for the token. 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 					//Push onto the list of active formatting elements that element.
 					active_formatting_elements = 
@@ -5499,13 +5610,20 @@ void in_body_mode(token *tk)
 				{
 					element_node *e;
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements, 
-																			(node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Insert an HTML element for the token. 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e);
+					current_node = open_element_stack_top(o_e_stack);
 
 					//Push onto the list of active formatting elements that element.
 					active_formatting_elements = active_formatting_list_add_element(e, active_formatting_elements);
@@ -5514,27 +5632,34 @@ void in_body_mode(token *tk)
 				else if(strcmp(tk->stt.tag_name, "nobr") == 0)
 				{ 
 					element_node *e;
-					node *match_node;
+					element_node *match_node;
 
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  
-																			(node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
+
 					//If the stack of open elements has a nobr element in scope , 
 					//then this is a parse error ; act as if an end tag with the tag name "nobr" had been seen, 
 					//then once again reconstruct the active formatting elements , if any.
-					if(has_element_in_scope((node *)doc_root, current_node, "nobr", &match_node) == 1)
+					if(has_element_in_scope(o_e_stack, "nobr", &match_node) == 1)
 					{	
 						//parse error
-						adoption_agency_algorithm((node *)doc_root, &active_formatting_elements, &current_node, "nobr");
+						adoption_agency_algorithm(&active_formatting_elements, &o_e_stack, &current_node, "nobr");
 
-						current_node = reconstruct_active_formatting_elements(active_formatting_elements,  
-																			(node *)doc_root, current_node);
+						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 					}
 
 					//Insert an HTML element for the token. 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					//Push onto the list of active formatting elements that element.
 					active_formatting_elements = active_formatting_list_add_element(e, active_formatting_elements);
@@ -5546,12 +5671,20 @@ void in_body_mode(token *tk)
 				{
 					element_node *e;
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  
-																			(node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
+
 					//Insert an HTML element for the token.
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					//Insert a marker at the end of the list of active formatting elements
 					active_formatting_elements = active_formatting_list_add_marker(active_formatting_elements);
@@ -5561,19 +5694,28 @@ void in_body_mode(token *tk)
 				else if(strcmp(tk->stt.tag_name, "table") == 0)
 				{
 					element_node *e;
-					node *match_node;
+					element_node *match_node;
 						
 					//If the Document is not set to quirks mode , and the stack of open elements has a p element in button scope'
 					//then act as if an end tag with the tag name "p" had been seen.
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 					//Insert an HTML element for the token.
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 					
 					current_mode = IN_TABLE;
 
@@ -5588,10 +5730,17 @@ void in_body_mode(token *tk)
 				{
 					element_node *e;
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 					
 					//Acknowledge the token's self-closing flag, if it is set.
 					//Set the frameset-ok flag to "not ok".
@@ -5600,10 +5749,17 @@ void in_body_mode(token *tk)
 				{
 					element_node *e;
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 					
 					//Acknowledge the token's self-closing flag, if it is set.
 					//If the token does not have an attribute with the name "type", or if it does, but that attribute's value is not
@@ -5614,23 +5770,37 @@ void in_body_mode(token *tk)
 						(strcmp(tk->stt.tag_name, "track") == 0))
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 					//Acknowledge the token's self-closing flag , if it is set.
 				}
 				else if(strcmp(tk->stt.tag_name, "hr") == 0)
 				{
-					node *match_node;
+					element_node *match_node;
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 
 					//If the stack of open elements has a p element in button scope, 
 					//then act as if an end tag with the tag name "p" had been seen.
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					
-					add_child_node(current_node, (node *)e);
-
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 					//Acknowledge the token's self-closing flag , if it is set.
 					//Set the frameset-ok flag to "not ok".
 				}
@@ -5655,19 +5825,21 @@ void in_body_mode(token *tk)
 						
 						//Act as if a start tag token with the tag name "form" had been seen.
 						/*------------------------------------------------------------------*/
-						node *match_node;
+						element_node *match_node;
 						element_node *form_e, *hr_e_1, *hr_e_2, *label_e, *input_e;
 						text_node *label_text;
 						unsigned char *action_attr_val, *prompt_attr_val;
 
-						if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+						if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 						{
-							current_node = match_node->parent;
+							pop_elements_up_to(&o_e_stack, "p");
+							current_node = open_element_stack_top(o_e_stack);
 						}
 					
 						form_e = create_element_node("form", NULL, HTML);
 						add_child_node(current_node, (node *)form_e);
-						current_node = (node *)form_e;
+						open_element_stack_push(&o_e_stack, form_e); 
+						current_node = open_element_stack_top(o_e_stack);
 
 						//set the form element pointer to point to the element created.
 						form_element_ptr = form_e;
@@ -5682,13 +5854,13 @@ void in_body_mode(token *tk)
 						hr_e_1 = create_element_node("hr", NULL, HTML);
 						add_child_node(current_node, (node *)hr_e_1);
 
-						current_node = reconstruct_active_formatting_elements(active_formatting_elements,  
-																					(node *)doc_root, current_node);
+						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 						label_e = create_element_node("label", NULL, HTML);
 						add_child_node(current_node, (node *)label_e);
-						current_node = (node *)label_e;
-
+						open_element_stack_push(&o_e_stack, label_e); 
+						current_node = open_element_stack_top(o_e_stack);
+						
 						label_text = create_text_node();
 						prompt_attr_val = get_attribute_value("prompt", tk->stt.attributes);
 						if(prompt_attr_val != NULL)
@@ -5701,9 +5873,10 @@ void in_body_mode(token *tk)
 						}
 
 						add_child_node(current_node, (node *)label_text);
-
-						//back to form element:
-						current_node = (node *)form_e;
+					
+						open_element_stack_pop(&o_e_stack);		//back to form element:
+						current_node = open_element_stack_top(o_e_stack);
+						//current_node = (node *)form_e;
 
 						input_e = create_element_node("input", NULL, HTML);
 						
@@ -5714,13 +5887,16 @@ void in_body_mode(token *tk)
 
 						//Set the name attribute of the resulting input element to the value "isindex".
 						input_e->attributes = html_attribute_list_cons("name", "isindex", input_e->attributes);
-						add_child_node(current_node, (node *)input_e);
+						add_child_node(current_node, (node *)input_e);		//add input_e to the form element.
 
 						hr_e_2 = create_element_node("hr", NULL, HTML);
-						add_child_node(current_node, (node *)hr_e_2);
+						add_child_node(current_node, (node *)hr_e_2);		//add hr_e_2 to the form element.
 
 						//back to the parent of "form"
-						current_node = form_e->parent;
+						//current_node = form_e->parent;
+						open_element_stack_pop(&o_e_stack);
+						current_node = open_element_stack_top(o_e_stack);
+
 
 						//set the form_element_ptr to NULL.
 						form_element_ptr = NULL;
@@ -5729,8 +5905,16 @@ void in_body_mode(token *tk)
 				else if(strcmp(tk->stt.tag_name, "textarea") == 0)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					//implementation pending: ignore newlines at the start of the textarea
 					current_state = RCDATA_STATE;
@@ -5740,24 +5924,33 @@ void in_body_mode(token *tk)
 				}
 				else if(strcmp(tk->stt.tag_name, "xmp") == 0)
 				{
-					node *match_node;
+					element_node *match_node;
 					element_node *e;
 
 					//If the stack of open elementsp has a p element in button scope , 
 					//then act as if an end tag with the tag name "p" had been seen.
-					if(has_element_in_button_scope((node *)doc_root, current_node, "p", &match_node) == 1)
+					if(has_element_in_button_scope(o_e_stack, "p", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Set the frameset-ok flag to "not ok".
 					//Follow the generic raw text element parsing algorithm .
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = RAWTEXT_STATE;
 					original_insertion_mode = current_mode;
@@ -5768,8 +5961,16 @@ void in_body_mode(token *tk)
 					//Set the frameset-ok flag to "not ok".
 					//Follow the generic raw text element parsing algorithm .
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = RAWTEXT_STATE;
 					original_insertion_mode = current_mode;
@@ -5781,8 +5982,16 @@ void in_body_mode(token *tk)
 				{
 					//Follow the generic raw text element parsing algorithm .
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_state = RAWTEXT_STATE;
 					original_insertion_mode = current_mode;
@@ -5792,12 +6001,20 @@ void in_body_mode(token *tk)
 				{
 					element_node *e;
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Insert an HTML element for the token.
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					//Set the frameset-ok flag to "not ok".
 
@@ -5819,53 +6036,74 @@ void in_body_mode(token *tk)
 				{
 					element_node *e;
 
-					//If the current node is an option element, then act as if an end tag with the tag name "option" had been seen.
-					if(current_node->type == ELEMENT_N)
+					//If the current node is an option element, 
+					//then act as if an end tag with the tag name "option" had been seen.
+					if(strcmp(current_node->name, "option") == 0)
 					{
-						element_node *curr_element = (element_node *)current_node;
-
-						if(strcmp(curr_element->name, "option") == 0)
-						{
-							current_node = current_node->parent;
-						}
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Insert an HTML element for the token.
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 				}
 				else if((strcmp(tk->stt.tag_name, "rp") == 0) ||
 						(strcmp(tk->stt.tag_name, "rt") == 0))
 				{
 					element_node *e;
-					node *match_node;
-					if(has_element_in_scope((node *)doc_root, current_node, "ruby", &match_node) == 1)
+					element_node *match_node;
+
+					if(has_element_in_scope(o_e_stack, "ruby", &match_node) == 1)
 					{
-						current_node = generate_implied_end_tags(current_node);
+						current_node = generate_implied_end_tags(&o_e_stack);
 					}
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 				}
 				else if(strcmp(tk->stt.tag_name, "math") == 0)
 				{
 					element_node *e;
 					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 					
 					//Adjust MathML attributes for the token. (This fixes the case of MathML attributes that are not all lowercase.)
 					//Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink.)
 					//Insert a foreign element for the token, in the MathML namespace .
 					//If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag .
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, MATHML);
-					add_child_node(current_node, (node *)e);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 
 					if(tk->stt.self_closing_flag == SET)
 					{
@@ -5873,7 +6111,8 @@ void in_body_mode(token *tk)
 					}
 					else
 					{
-						current_node = (node *)e;
+						open_element_stack_push(&o_e_stack, e); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 				}
 				else if(strcmp(tk->stt.tag_name, "svg") == 0)
@@ -5881,7 +6120,7 @@ void in_body_mode(token *tk)
 					element_node *e;
 
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Adjust SVG attributes for the token. (This fixes the case of SVG attributes that are not all lowercase.)
 					//Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink in SVG.)
@@ -5889,7 +6128,14 @@ void in_body_mode(token *tk)
 					//Insert a foreign element for the token, in the SVG namespace .
 					//If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, SVG);
-					add_child_node(current_node, (node *)e);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 
 					if(tk->stt.self_closing_flag == SET)
 					{
@@ -5897,7 +6143,8 @@ void in_body_mode(token *tk)
 					}
 					else
 					{
-						current_node = (node *)e;
+						open_element_stack_push(&o_e_stack, e); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 				}
 				else if((strcmp(tk->stt.tag_name, "caption") == 0) ||
@@ -5920,11 +6167,17 @@ void in_body_mode(token *tk)
 					//This element will be an ordinary element.
 
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 					
-
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 
 					if(tk->stt.self_closing_flag == SET)
 					{
@@ -5932,7 +6185,8 @@ void in_body_mode(token *tk)
 					}
 					else
 					{
-						current_node = (node *)e;
+						open_element_stack_push(&o_e_stack, e); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 				}
 
@@ -5940,16 +6194,11 @@ void in_body_mode(token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-
 				if(strcmp(tk->ett.tag_name, "body") == 0)
 				{
-					node *match_node;
+					element_node *match_node;
 
-					if(has_element_in_scope((node *)doc_root, current_node, "body", &match_node) == 0)
+					if(has_element_in_scope(o_e_stack, "body", &match_node) == 0)
 					{
 						//parser error, ignore the token
 					}
@@ -5960,9 +6209,9 @@ void in_body_mode(token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "html") == 0)
 				{
-					node *match_node;
+					element_node *match_node;
 
-					if(has_element_in_scope((node *)doc_root, current_node, "body", &match_node) == 0)
+					if(has_element_in_scope(o_e_stack, "body", &match_node) == 0)
 					{
 						//parser error, ignore the token
 					}
@@ -5974,18 +6223,28 @@ void in_body_mode(token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "p") == 0)
 				{
-					node *match_node;
-					if(has_element_in_button_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+					element_node *match_node;
+
+					if(has_element_in_button_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "p");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					else
 					{
-							//parse error, act as if a start tag with the tag name "p" had been seen, 
-							//then reprocess the current token.
+						//parse error, act as if a start tag with the tag name "p" had been seen, 
+						//then reprocess the current token.
 						element_node *e = create_element_node("p", NULL, HTML);
-						add_child_node(current_node, (node *)e);
-						current_node = (node *)e;
+						if(apply_foster_parenting == 1)
+						{
+							add_child_to_foster_parent(o_e_stack, (node *)e);
+						}
+						else
+						{
+							add_child_node(current_node, (node *)e);
+						}
+						open_element_stack_push(&o_e_stack, e); 
+						current_node = open_element_stack_top(o_e_stack);
 
 						token_process = REPROCESS;
 					}
@@ -6016,10 +6275,12 @@ void in_body_mode(token *tk)
 						(strcmp(tk->ett.tag_name, "summary") == 0) ||
 						(strcmp(tk->ett.tag_name, "ul") == 0))
 				{
-					node *match_node;
-					if(has_element_in_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+					element_node *match_node;
+
+					if(has_element_in_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					else
 					{
@@ -6029,7 +6290,7 @@ void in_body_mode(token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "form") == 0)
 				{
-					node *match_node;
+					element_node *match_node;
 					element_node *form_element_node;
 					
 					form_element_node = form_element_ptr;
@@ -6037,13 +6298,14 @@ void in_body_mode(token *tk)
 					form_element_ptr = NULL;
 
 					if((form_element_node == NULL) ||
-						(has_element_in_scope((node *)doc_root, current_node, "form", &match_node) == 0))
+						(has_element_in_scope(o_e_stack, "form", &match_node) == 0))
 					{
 						; 	//parse error, ignore the token
 					}
 					else
 					{
-						current_node = match_node->parent;		//to have come here, has_element_in_scope() must have had return value of 1 with match_node non-NULL.  
+						pop_elements_up_to(&o_e_stack, "form");
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 				}
@@ -6054,30 +6316,26 @@ void in_body_mode(token *tk)
 						(strcmp(tk->ett.tag_name, "h5") == 0) ||
 						(strcmp(tk->ett.tag_name, "h6") == 0))
 				{
-					node *match_node;
+					element_node *match_node;
 
-					if((has_element_in_scope((node *)doc_root, current_node, "h1", &match_node) == 0) &&
-					   (has_element_in_scope((node *)doc_root, current_node, "h2", &match_node) == 0) &&
-					   (has_element_in_scope((node *)doc_root, current_node, "h3", &match_node) == 0) &&
-					   (has_element_in_scope((node *)doc_root, current_node, "h4", &match_node) == 0) &&
-					   (has_element_in_scope((node *)doc_root, current_node, "h5", &match_node) == 0) &&
-					   (has_element_in_scope((node *)doc_root, current_node, "h6", &match_node) == 0))
+					if((has_element_in_scope(o_e_stack, "h1", &match_node) == 0) &&
+					   (has_element_in_scope(o_e_stack, "h2", &match_node) == 0) &&
+					   (has_element_in_scope(o_e_stack, "h3", &match_node) == 0) &&
+					   (has_element_in_scope(o_e_stack, "h4", &match_node) == 0) &&
+					   (has_element_in_scope(o_e_stack, "h5", &match_node) == 0) &&
+					   (has_element_in_scope(o_e_stack, "h6", &match_node) == 0))
 					{
 						;	//parse error, ignore the token
 					}
 					else
 					{
-						node *temp_node = current_node;
+						element_node *temp_element;
+						int header_found = 0;
 						
-						if(temp_node->type != ELEMENT_N)
+						while(o_e_stack != NULL)
 						{
-							temp_node = temp_node->parent;
-						}
+							temp_element = open_element_stack_top(o_e_stack);
 
-						while(temp_node != (node *)doc_root)
-						{
-							element_node *temp_element = (element_node *)temp_node;
-							
 							if((strcmp(temp_element->name, "h1") == 0) ||
 							   (strcmp(temp_element->name, "h2") == 0) ||
 							   (strcmp(temp_element->name, "h3") == 0) ||
@@ -6085,20 +6343,30 @@ void in_body_mode(token *tk)
 							   (strcmp(temp_element->name, "h5") == 0) ||
 							   (strcmp(temp_element->name, "h6") == 0))
 							{
-								current_node = temp_element->parent;
-								break;
+								header_found = 1;
 							}
 
-							temp_node = temp_node->parent;
+							open_element_stack_pop(&o_e_stack);
+	
+							if(header_found == 1)
+							{
+								break;
+							}
 						}
+						
+						//o_e_stack will not be NULL in the last step, as a header element must be found, 
+						//and loop will exit after it is popped.
+						current_node = open_element_stack_top(o_e_stack);
 					}
 				}
 				else if(strcmp(tk->ett.tag_name, "li") == 0)
 				{
-					node *match_node;
-					if(has_element_in_list_item_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+					element_node *match_node;
+					
+					if(has_element_in_list_item_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					else
 					{
@@ -6108,10 +6376,12 @@ void in_body_mode(token *tk)
 				else if((strcmp(tk->ett.tag_name, "dd") == 0) ||
 						(strcmp(tk->ett.tag_name, "dt") == 0))
 				{
-					node *match_node;
-					if(has_element_in_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+					element_node *match_node;
+
+					if(has_element_in_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					else
 					{
@@ -6136,24 +6406,24 @@ void in_body_mode(token *tk)
 
 				{
 					/*----------------------Adoption Agency Algorithm-------------------------------------*/
-					adoption_agency_algorithm((node *)doc_root, &active_formatting_elements, &current_node, tk->ett.tag_name);
+					adoption_agency_algorithm(&active_formatting_elements, &o_e_stack, &current_node, tk->ett.tag_name);
 
 				}
 				else if((strcmp(tk->ett.tag_name, "applet") == 0) ||
 						(strcmp(tk->ett.tag_name, "marquee") == 0) ||
 						(strcmp(tk->ett.tag_name, "object") == 0))
 				{
-					node *match_node;
+					element_node *match_node;
 
 					//If the stack of open elements does not have an element in scope with the same tag name as that
 					//of the token, then this is a parse error ; ignore the token.
-					if(has_element_in_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+					if(has_element_in_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Clear the list of active formatting elements up to the last marker .
 						active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
-
 					}
 					else
 					{
@@ -6168,11 +6438,17 @@ void in_body_mode(token *tk)
 					element_node *e;
 					
 					//Reconstruct the active formatting elements, if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements,  (node *)doc_root, current_node);
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					e = create_element_node("br", NULL, HTML);
-					add_child_node(current_node, (node *)e);
-					
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 					
 					//Acknowledge the token's self-closing flag, if it is set.
 					//Set the frameset-ok flag to "not ok".
@@ -6180,20 +6456,17 @@ void in_body_mode(token *tk)
 				else if(strcmp(tk->ett.tag_name, "sarcasm") == 0)
 				{
 					//act as described in the "any other end tag" entry below
-					node *temp_node = current_node;
-						
-					if(temp_node->type != ELEMENT_N)
+					element_stack *temp_stack = o_e_stack;
+					element_node *temp_element;
+					
+					while(temp_stack != NULL)
 					{
-						temp_node = temp_node->parent;
-					}
+						temp_element = open_element_stack_top(temp_stack);
 
-					while(temp_node != (node *)doc_root)
-					{
-						element_node *temp_element = (element_node *)temp_node;
-						
 						if(strcmp(temp_element->name, tk->ett.tag_name) == 0)
 						{
-							current_node = temp_element->parent;
+							pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+							current_node = open_element_stack_top(o_e_stack);
 							break;
 						}
 						else if(is_in_special_category(temp_element) == 1)
@@ -6202,27 +6475,23 @@ void in_body_mode(token *tk)
 						}
 						else
 						{
-							temp_node = temp_node->parent;
+							temp_stack = previous_stack_node(temp_stack);
 						}
 					}
-
 				}
 				else
 				{
-					node *temp_node = current_node;
-						
-					if(temp_node->type != ELEMENT_N)
+					element_stack *temp_stack = o_e_stack;
+					element_node *temp_element;
+					
+					while(temp_stack != NULL)
 					{
-						temp_node = temp_node->parent;
-					}
+						temp_element = open_element_stack_top(temp_stack);
 
-					while(temp_node != (node *)doc_root)
-					{
-						element_node *temp_element = (element_node *)temp_node;
-						
 						if(strcmp(temp_element->name, tk->ett.tag_name) == 0)
 						{
-							current_node = temp_element->parent;
+							pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+							current_node = open_element_stack_top(o_e_stack);
 							break;
 						}
 						else if(is_in_special_category(temp_element) == 1)
@@ -6231,8 +6500,9 @@ void in_body_mode(token *tk)
 						}
 						else
 						{
-							temp_node = temp_node->parent;
+							temp_stack = previous_stack_node(temp_stack);
 						}
+
 					}
 				}
 			}
@@ -6247,6 +6517,7 @@ void in_body_mode(token *tk)
 
 }
 
+/*=======================END OF IN BODY MODE==================================*/
 /*------------------------------------------------------------------------------------*/
 void text_mode(token *tk)
 { 
@@ -6254,9 +6525,9 @@ void text_mode(token *tk)
 	{
 		case TOKEN_CHARACTER:
 			{
-				if(current_node->type == TEXT_N)
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
-					text_node *t = (text_node *)current_node;
+					text_node *t = (text_node *)current_node->last_child;
 					t->text_data = string_append(t->text_data, tk->cht.ch);
 				}
 				else
@@ -6265,7 +6536,6 @@ void text_mode(token *tk)
 					t->text_data = string_append(t->text_data, tk->cht.ch);
 					/*if current node is 'textarea' ignore LINE_FEED characters at the beginning of text*/
 					add_child_node(current_node, (node *)t);
-					current_node = (node *)t;
 				}
 			}
 			break;
@@ -6273,73 +6543,24 @@ void text_mode(token *tk)
 			{
 				if(strcmp(tk->ett.tag_name, "script") == 0)
 				{
-					if(current_node->type == TEXT_N)
-					{
-						current_node = current_node->parent->parent;
-					}
-					else
-					{
-						current_node = current_node->parent;
-					}
-
-					//a special case for the "script" start tag in "AFTER_HEAD" mode
-					if(original_insertion_mode == AFTER_HEAD)
-					{
-						current_node = head_element_ptr->parent;
-					}
-
-					current_mode = original_insertion_mode;
-
-				}
-				else if((strcmp(tk->ett.tag_name, "noframes") == 0) ||
-						(strcmp(tk->ett.tag_name, "style") == 0) ||
-						(strcmp(tk->ett.tag_name, "title") == 0))
-				{
-					if(current_node->type == TEXT_N)
-					{
-						current_node = current_node->parent->parent;
-					}
-					else
-					{
-						current_node = current_node->parent;
-					}
-
-					//a special case for the start tags "noframes", "style", "title"  in "AFTER_HEAD" mode
-					if(original_insertion_mode == AFTER_HEAD)
-					{
-						current_node = head_element_ptr->parent;
-					}
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = original_insertion_mode;
 
 				}
 				else		//any other end tag
 				{
-					if(current_node->type == TEXT_N)
-					{
-						current_node = current_node->parent->parent;
-					}
-					else
-					{
-						current_node = current_node->parent;
-					}
-
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
 					current_mode = original_insertion_mode;
 				}
 			}
 			break;
 		case TOKEN_EOF:
 			{
-				if(current_node->type == ELEMENT_N)
-				{
-					element_node *e = (element_node *)current_node;
-					if(strcmp(e->name, "script") == 0)
-					{
-						;//implementation pending: mark the script element as "already started" 
-					}
-				}
-
-				current_node = current_node->parent;
+				open_element_stack_pop(&o_e_stack); 
+				current_node = open_element_stack_top(o_e_stack);
 
 				current_mode = original_insertion_mode;
 				token_process = REPROCESS;
@@ -6381,19 +6602,15 @@ void in_table_mode(token *tk)
 					//Insert a marker at the end of the list of active formatting elements .
 					//Insert an HTML element for the token, then switch the insertion mode to "in caption "
 					element_node *e;
-					node *table_context_node;
 
-					table_context_node = back_to_table_context((node *)doc_root, current_node);
-					if(table_context_node != NULL)
-					{
-						current_node = table_context_node;
-					}
-
+					current_node = back_to_table_context(&o_e_stack);  
+			
 					active_formatting_elements = active_formatting_list_add_marker(active_formatting_elements);
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_CAPTION;
 				}
@@ -6402,17 +6619,13 @@ void in_table_mode(token *tk)
 					//Clear the stack back to a table context.
 					//Insert an HTML element for the token, then switch the insertion mode to "in column group "
 					element_node *e;
-					node *table_context_node;
-
-					table_context_node = back_to_table_context((node *)doc_root, current_node);
-					if(table_context_node != NULL)
-					{
-						current_node = table_context_node;
-					}
-					
+				
+					current_node = back_to_table_context(&o_e_stack);
+			
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_COLUMN_GROUP;
 				}
@@ -6422,17 +6635,13 @@ void in_table_mode(token *tk)
 					//then reprocess the current token.
 					
 					element_node *e;
-					node *table_context_node;
-
-					table_context_node = back_to_table_context((node *)doc_root, current_node);
-					if(table_context_node != NULL)
-					{
-						current_node = table_context_node;
-					}
 					
+					current_node = back_to_table_context(&o_e_stack);
+
 					e = create_element_node("colgroup", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_COLUMN_GROUP;
 					token_process = REPROCESS;
@@ -6442,17 +6651,13 @@ void in_table_mode(token *tk)
 						(strcmp(tk->stt.tag_name, "thead") == 0))
 				{
 					element_node *e;
-					node *table_context_node;
-
-					table_context_node = back_to_table_context((node *)doc_root, current_node);
-					if(table_context_node != NULL)
-					{
-						current_node = table_context_node;
-					}
+			
+					current_node = back_to_table_context(&o_e_stack);
 					
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_TABLE_BODY;
 
@@ -6462,18 +6667,13 @@ void in_table_mode(token *tk)
 						(strcmp(tk->stt.tag_name, "tr") == 0))
 				{
 					element_node *e;
-					node *table_context_node;
 
-					table_context_node = back_to_table_context((node *)doc_root, current_node);
-					if(table_context_node != NULL)
-					{
-						current_node = table_context_node;
-					}
-
+					current_node = back_to_table_context(&o_e_stack);
 
 					e = create_element_node("tbody", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_TABLE_BODY;
 					token_process = REPROCESS;
@@ -6483,13 +6683,15 @@ void in_table_mode(token *tk)
 					//parse error
 					//Act as if an end tag token with the tag name "table" had been seen, then, if that token
 					//wasn't ignored, reprocess the current token.
-					node *match_node;
-					if(has_element_in_table_scope((node *)doc_root, current_node, "table", &match_node) == 1)
+					element_node *match_node;
+
+					if(has_element_in_table_scope(o_e_stack, "table", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "table");
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Reset the insertion mode appropriately
-						current_mode = reset_insertion_mode((node *)doc_root, current_node);
+						current_mode = reset_insertion_mode(o_e_stack);
 						token_process = REPROCESS;
 					}
 					else
@@ -6535,7 +6737,19 @@ void in_table_mode(token *tk)
 				}
 				else
 				{
-					; //implementation pending
+					//same as "default":
+					if((strcmp(current_node->name, "table") == 0) ||
+					   (strcmp(current_node->name, "tbody") == 0) ||
+					   (strcmp(current_node->name, "tfoot") == 0) ||
+				       (strcmp(current_node->name, "thead") == 0) ||
+				       (strcmp(current_node->name, "tr") == 0))
+					{
+						apply_foster_parenting = 1;
+					}
+
+					in_body_mode(tk);
+				
+					apply_foster_parenting = 0;
 				}
 			}
 			break;
@@ -6543,13 +6757,14 @@ void in_table_mode(token *tk)
 			{
 				if(strcmp(tk->ett.tag_name, "table") == 0)
 				{	
-					node *match_node;
-					if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+					element_node *match_node;
+					if(has_element_in_table_scope(o_e_stack, "table", &match_node) == 1)
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "table");
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Reset the insertion mode appropriately
-						current_mode = reset_insertion_mode((node *)doc_root, current_node);
+						current_mode = reset_insertion_mode(o_e_stack);
 					}
 					else
 					{
@@ -6573,9 +6788,20 @@ void in_table_mode(token *tk)
 				}
 				else
 				{
-					; //implementation pending
-				}
+					 //same as "default":
+					if((strcmp(current_node->name, "table") == 0) ||
+					   (strcmp(current_node->name, "tbody") == 0) ||
+					   (strcmp(current_node->name, "tfoot") == 0) ||
+				       (strcmp(current_node->name, "thead") == 0) ||
+				       (strcmp(current_node->name, "tr") == 0))
+					{
+						apply_foster_parenting = 1;
+					}
 
+					in_body_mode(tk);
+				
+					apply_foster_parenting = 0;
+				}
 			}
 			break;
 		default:
@@ -6583,7 +6809,19 @@ void in_table_mode(token *tk)
 				//Parse error . Process the token using the rules for the "in body " insertion mode , except that
 				//if the current node is a table , tbody , tfoot , thead , or tr element, then, whenever a
 				//node would be inserted into the current node , it must instead be foster parented .
-				   
+				if((strcmp(current_node->name, "table") == 0) ||
+				   (strcmp(current_node->name, "tbody") == 0) ||
+				   (strcmp(current_node->name, "tfoot") == 0) ||
+				   (strcmp(current_node->name, "thead") == 0) ||
+				   (strcmp(current_node->name, "tr") == 0))
+				{
+					apply_foster_parenting = 1;
+				}
+
+				in_body_mode(tk);
+				
+				apply_foster_parenting = 0;
+   
 			}
 			break;
 	}
@@ -6620,10 +6858,16 @@ void in_table_text_mode(token *tk)
 		text_node *t = create_text_node();
 
 		t->text_data = strdup(pending_table_characters);
-
-		if(apply_foster_parenting == 1)
+		
+		/*also need to check if the current_node is a "table", "tbody", "tfoot", "thead", or "tr" */
+		if((apply_foster_parenting == 1) && 
+		   ((strcmp(current_node->name, "table") == 0) ||
+			(strcmp(current_node->name, "tbody") == 0) ||
+			(strcmp(current_node->name, "tfoot") == 0) ||
+			(strcmp(current_node->name, "thead") == 0) ||
+			(strcmp(current_node->name, "tr") == 0)))
 		{
-			add_child_to_foster_parent((node *)doc_root, current_node, (node *)t);
+			add_child_to_foster_parent(o_e_stack, (node *)t);
 		}
 		else
 		{
@@ -6660,10 +6904,12 @@ void in_caption_mode(token *tk)
 		//parse error
 		//Act as if an end tag with the tag name "caption" had been seen, then, 
 		//if that token wasn't ignored, reprocess the current token.
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, "caption", &match_node) == 1)
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, "caption");
+			current_node = open_element_stack_top(o_e_stack);
+
 			//Clear the list of active formatting elements up to the last marker.
 			active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
 			current_mode = IN_TABLE;
@@ -6677,10 +6923,13 @@ void in_caption_mode(token *tk)
 	else if((tk->type == TOKEN_END_TAG) &&
 			(strcmp(tk->ett.tag_name, "caption") == 0))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1)
+		element_node *match_node;
+
+		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, "caption");
+			current_node = open_element_stack_top(o_e_stack);
+
 			//Clear the list of active formatting elements up to the last marker.
 			active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
 			current_mode = IN_TABLE;
@@ -6697,10 +6946,13 @@ void in_caption_mode(token *tk)
 		//parse error
 		//Act as if an end tag with the tag name "caption" had been seen, then, 
 		//if that token wasn't ignored, reprocess the current token.
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, "caption", &match_node) == 1)
+		element_node *match_node;
+
+		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, "caption");
+			current_node = open_element_stack_top(o_e_stack);
+
 			//Clear the list of active formatting elements up to the last marker.
 			active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
 			current_mode = IN_TABLE;
@@ -6748,9 +7000,9 @@ void in_column_group_mode(token *tk)
 				{
 					//insert the character into the current node
 
-					if(current_node->type == TEXT_N)
+					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node;
+						text_node *t = (text_node *)current_node->last_child;
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 					}
 					else
@@ -6758,30 +7010,21 @@ void in_column_group_mode(token *tk)
 						text_node *t = create_text_node();
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 						add_child_node(current_node, (node *)t);
-						current_node = (node *)t;
 					}
 				}
 				else
 				{
 					//Act as if an end tag with the tag name "colgroup" had been seen, 
 					//and then, if that token wasn't ignored, reprocess the current token.
-
-					element_node *temp_element_node;
-
-					if(current_node->type != ELEMENT_N)
-					{
-						current_node = current_node->parent;
-					}
-					temp_element_node = (element_node *)current_node;
-
-					
-					if(strcmp(temp_element_node->name, "html") == 0)
+					if(strcmp(current_node->name, "html") == 0)
 					{
 						;//parse error, ignore the token
 					}
 					else
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
+
 						current_mode = IN_TABLE;
 						token_process = REPROCESS;
 					}
@@ -6791,30 +7034,15 @@ void in_column_group_mode(token *tk)
 		case TOKEN_COMMENT:
 			{
 				comment_node *c = create_comment_node(tk->cmt.comment);
-
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-				
 				add_child_node(current_node, (node *)c);
 			}
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
-			if(current_node->type == TEXT_N)
-			{
-				current_node = current_node->parent;
-			}
 			break;
 		case TOKEN_START_TAG:
 		    {
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{
 					//Process the token using the rules for the "in body " insertion mode.
@@ -6834,17 +7062,15 @@ void in_column_group_mode(token *tk)
 					//Act as if an end tag with the tag name "colgroup" had been seen, 
 					//and then, if that token wasn't ignored, reprocess the current token.
 
-					element_node *temp_element_node = (element_node *)current_node;
-					//it's safe to cast current_node to (element_node *) here
-					//as current_node cannot be TEXT_N
-
-					if(strcmp(temp_element_node->name, "html") == 0)
+					if(strcmp(current_node->name, "html") == 0)
 					{
 						;//parse error, ignore the token
 					}
 					else
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
+
 						current_mode = IN_TABLE;
 						token_process = REPROCESS;
 					}
@@ -6853,24 +7079,16 @@ void in_column_group_mode(token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-
 				if(strcmp(tk->ett.tag_name, "colgroup") == 0)
 				{
-					//it's safe to cast current_node to (element_node *) here
-					//as current_node cannot be TEXT_N
-					element_node *temp_element_node = (element_node *)current_node;
-					
-					if(strcmp(temp_element_node->name, "html") == 0)
+					if(strcmp(current_node->name, "html") == 0)
 					{
 						;//parse error, ignore the token
 					}
 					else
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 
 						current_mode = IN_TABLE;
 					}
@@ -6883,18 +7101,15 @@ void in_column_group_mode(token *tk)
 				{
 					//Act as if an end tag with the tag name "colgroup" had been seen, 
 					//and then, if that token wasn't ignored, reprocess the current token.
-
-					element_node *temp_element_node = (element_node *)current_node;
-					//it's safe to cast current_node to (element_node *) here
-					//as current_node cannot be TEXT_N
-					
-					if(strcmp(temp_element_node->name, "html") == 0)
+					if(strcmp(current_node->name, "html") == 0)
 					{
 						;//parse error, ignore the token
 					}
 					else
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
+
 						current_mode = IN_TABLE;
 						token_process = REPROCESS;
 					}
@@ -6905,27 +7120,18 @@ void in_column_group_mode(token *tk)
 			{
 				//Act as if an end tag with the tag name "colgroup" had been seen, 
 				//and then, if that token wasn't ignored, reprocess the current token.
-
-				element_node *temp_element_node;
-
-				if(current_node->type != ELEMENT_N)
-				{
-					current_node = current_node->parent;
-				}
-				temp_element_node = (element_node *)current_node;
-
-					
-				if(strcmp(temp_element_node->name, "html") == 0)
+				if(strcmp(current_node->name, "html") == 0)
 				{
 					;//parse error, ignore the token
 				}
 				else
 				{
-					current_node = current_node->parent;
+					open_element_stack_pop(&o_e_stack); 
+					current_node = open_element_stack_top(o_e_stack);
+
 					current_mode = IN_TABLE;
 					token_process = REPROCESS;
 				}
-
 			}
 			break;
 	}
@@ -6939,16 +7145,13 @@ void in_table_body_mode(token *tk)
 	   (strcmp(tk->stt.tag_name, "tr") == 0))
 	{
 		element_node *e;
-		node *table_body_context_node = back_to_table_body_context((node *)doc_root, current_node);
-
-		if(table_body_context_node != NULL)
-		{
-			current_node = table_body_context_node;
-		}
+	
+		current_node = back_to_table_body_context(&o_e_stack);
 
 		e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 		add_child_node(current_node, (node *)e);
-		current_node = (node *)e;
+		open_element_stack_push(&o_e_stack, e); 
+		current_node = open_element_stack_top(o_e_stack);
 
 		current_mode = IN_ROW;
 	}
@@ -6959,16 +7162,13 @@ void in_table_body_mode(token *tk)
 		//parse error
 		//Act as if a start tag with the tag name "tr" had been seen, then reprocess the current token.
 		element_node *e;
-		node *table_body_context_node = back_to_table_body_context((node *)doc_root, current_node);
-
-		if(table_body_context_node != NULL)
-		{
-			current_node = table_body_context_node;
-		}
+	
+		current_node = back_to_table_body_context(&o_e_stack);
 
 		e = create_element_node("tr", NULL, HTML);
 		add_child_node(current_node, (node *)e);
-		current_node = (node *)e;
+		open_element_stack_push(&o_e_stack, e); 
+		current_node = open_element_stack_top(o_e_stack);
 
 		current_mode = IN_ROW;
 		token_process = REPROCESS;
@@ -6981,25 +7181,22 @@ void in_table_body_mode(token *tk)
 			 (strcmp(tk->stt.tag_name, "tfoot") == 0) ||
 			 (strcmp(tk->stt.tag_name, "thead") == 0)))
 	{
-		node *match_node;
-		if((has_element_in_table_scope((node *)doc_root, current_node, "tbody", &match_node) == 0) &&
-		   (has_element_in_table_scope((node *)doc_root, current_node, "thead", &match_node) == 0) &&
-		   (has_element_in_table_scope((node *)doc_root, current_node, "tfoot", &match_node) == 0))
+		element_node *match_node;
+		if((has_element_in_table_scope(o_e_stack, "tbody", &match_node) == 0) &&
+		   (has_element_in_table_scope(o_e_stack, "thead", &match_node) == 0) &&
+		   (has_element_in_table_scope(o_e_stack, "tfoot", &match_node) == 0))
 		{
 			;//parse error, ignore the token
 		}
 		else
 		{
-			node *table_body_context_node = back_to_table_body_context((node *)doc_root, current_node);
+			current_node = back_to_table_body_context(&o_e_stack);
+			//current_node should be "tbody", "thead", or"tfoot".
 
-			if(table_body_context_node != NULL)
-			{
-				current_node = table_body_context_node;
-				//current_node should be "tbody", "thead", or"tfoot".
-			}
 			//Act as if an end tag with the same tag name as the current node("tbody", "tfoot", or "thead") had
 			//been seen, then reprocess the current token.
-			current_node = current_node->parent;	//back to "table".
+			open_element_stack_pop(&o_e_stack); 
+			current_node = open_element_stack_top(o_e_stack);	//back to "table".
 
 			current_mode = IN_TABLE;
 			token_process = REPROCESS;
@@ -7009,25 +7206,22 @@ void in_table_body_mode(token *tk)
 	else if((tk->type == TOKEN_END_TAG) &&
 			(strcmp(tk->ett.tag_name, "table") == 0))
 	{
-		node *match_node;
-		if((has_element_in_table_scope((node *)doc_root, current_node, "tbody", &match_node) == 0) &&
-		   (has_element_in_table_scope((node *)doc_root, current_node, "thead", &match_node) == 0) &&
-		   (has_element_in_table_scope((node *)doc_root, current_node, "tfoot", &match_node) == 0))
+		element_node *match_node;
+		if((has_element_in_table_scope(o_e_stack, "tbody", &match_node) == 0) &&
+		   (has_element_in_table_scope(o_e_stack, "thead", &match_node) == 0) &&
+		   (has_element_in_table_scope(o_e_stack, "tfoot", &match_node) == 0))
 		{
 			;//parse error, ignore the token
 		}
 		else
 		{
-			node *table_body_context_node = back_to_table_body_context((node *)doc_root, current_node);
+			current_node = back_to_table_body_context(&o_e_stack);
+			//current_node should be "tbody", "thead", or"tfoot".
 
-			if(table_body_context_node != NULL)
-			{
-				current_node = table_body_context_node;
-				//current_node should be "tbody", "thead", or"tfoot".
-			}
 			//Act as if an end tag with the same tag name as the current node("tbody", "tfoot", or "thead") had
 			//been seen, then reprocess the current token.
-			current_node = current_node->parent;	//back to "table".
+			open_element_stack_pop(&o_e_stack); 
+			current_node = open_element_stack_top(o_e_stack);	//back to "table".
 
 			current_mode = IN_TABLE;
 			token_process = REPROCESS;
@@ -7040,21 +7234,16 @@ void in_table_body_mode(token *tk)
 			  (strcmp(tk->ett.tag_name, "thead") == 0)))
 
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			node *table_body_context_node = back_to_table_body_context((node *)doc_root, current_node);
+			current_node = back_to_table_body_context(&o_e_stack);
+			//current_node should be "tbody", "thead", or"tfoot".
 
-			if(table_body_context_node != NULL)
-			{
-				current_node = table_body_context_node;
-				//current_node should be "tbody", "thead", or"tfoot".
-			}
-
-			current_node = current_node->parent;
+			open_element_stack_pop(&o_e_stack); 
+			current_node = open_element_stack_top(o_e_stack);
 
 			current_mode = IN_TABLE;
-
 		}
 		else
 		{
@@ -7089,16 +7278,13 @@ void in_row_mode(token *tk)
 		 (strcmp(tk->stt.tag_name, "td") == 0)))
 	{
 		element_node *e;
-		node *table_row_context_node = back_to_table_row_context((node *)doc_root, current_node);
-
-		if(table_row_context_node != NULL)
-		{
-			current_node = table_row_context_node;
-		}
+	
+		current_node = back_to_table_row_context(&o_e_stack);
 
 		e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 		add_child_node(current_node, (node *)e);
-		current_node = (node *)e;
+		open_element_stack_push(&o_e_stack, e); 
+		current_node = open_element_stack_top(o_e_stack);
 
 		current_mode = IN_CELL;
 		
@@ -7114,18 +7300,14 @@ void in_row_mode(token *tk)
 		 (strcmp(tk->stt.tag_name, "thead") == 0) ||
 		 (strcmp(tk->stt.tag_name, "tr") == 0)))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, "tr", &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, "tr", &match_node) == 1) 
 		{
-			node *table_row_context_node = back_to_table_row_context((node *)doc_root, current_node);
-
-			if(table_row_context_node != NULL)
-			{
-				current_node = table_row_context_node;
-				//current_node should be "tr"
-			}
+			current_node = back_to_table_row_context(&o_e_stack);
+			//current_node should be "tr"
 			
-			current_node = current_node->parent;	// back to parent of "tr" node
+			open_element_stack_pop(&o_e_stack); 
+			current_node = open_element_stack_top(o_e_stack);	// back to parent of "tr" node
 
 			current_mode = IN_TABLE_BODY;
 
@@ -7140,18 +7322,14 @@ void in_row_mode(token *tk)
 	else if((tk->type == TOKEN_END_TAG) &&
 			(strcmp(tk->ett.tag_name, "tr") == 0))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			node *table_row_context_node = back_to_table_row_context((node *)doc_root, current_node);
-
-			if(table_row_context_node != NULL)
-			{
-				current_node = table_row_context_node;
-				//current_node should be "tr"
-			}
+			current_node = back_to_table_row_context(&o_e_stack);
+			//current_node should be "tr"
 			
-			current_node = current_node->parent;	// back to parent of "tr" node
+			open_element_stack_pop(&o_e_stack); 
+			current_node = open_element_stack_top(o_e_stack);	// back to parent of "tr" node
 
 			current_mode = IN_TABLE_BODY;
 		}
@@ -7163,18 +7341,14 @@ void in_row_mode(token *tk)
 	else if((tk->type == TOKEN_END_TAG) &&
 			(strcmp(tk->ett.tag_name, "table") == 0))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, "tr", &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, "tr", &match_node) == 1) 
 		{
-			node *table_row_context_node = back_to_table_row_context((node *)doc_root, current_node);
-
-			if(table_row_context_node != NULL)
-			{
-				current_node = table_row_context_node;
-				//current_node should be "tr"
-			}
+			current_node = back_to_table_row_context(&o_e_stack);
+			//current_node should be "tr"
 			
-			current_node = current_node->parent;	// back to parent of "tr" node
+			open_element_stack_pop(&o_e_stack); 
+			current_node = open_element_stack_top(o_e_stack);	// back to parent of "tr" node
 
 			current_mode = IN_TABLE_BODY;
 
@@ -7190,14 +7364,25 @@ void in_row_mode(token *tk)
 			 (strcmp(tk->ett.tag_name, "tfoot") == 0) ||
 			 (strcmp(tk->ett.tag_name, "thead") == 0)))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			current_node = match_node;
+			if(has_element_in_table_scope(o_e_stack, "tr", &match_node) == 1) 
+			{
+				current_node = back_to_table_row_context(&o_e_stack);
+				//current_node should be "tr"
+			
+				open_element_stack_pop(&o_e_stack); 
+				current_node = open_element_stack_top(o_e_stack);	// back to parent of "tr" node
 
-			current_mode = IN_TABLE_BODY;
+				current_mode = IN_TABLE_BODY;
 
-			token_process = REPROCESS;
+				token_process = REPROCESS;
+			}
+			else
+			{
+				;//parse error, ignore the token
+			}
 		}
 		else
 		{
@@ -7236,11 +7421,12 @@ void in_cell_mode(token *tk)
 		 (strcmp(tk->stt.tag_name, "td") == 0) ||
 		 (strcmp(tk->stt.tag_name, "th") == 0)))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, "td", &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, "td", &match_node) == 1) 
 		{
 			//close the cell and reprocess the current token.
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, "td");
+			current_node = open_element_stack_top(o_e_stack);
 
 			//Clear the list of active formatting elements up to the last marker .
 			active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
@@ -7249,10 +7435,12 @@ void in_cell_mode(token *tk)
 			token_process = REPROCESS;
 			
 		}
-		else if(has_element_in_table_scope((node *)doc_root, current_node, "th", &match_node) == 1) 
+		else if(has_element_in_table_scope(o_e_stack, "th", &match_node) == 1) 
 		{
 			//close the cell and reprocess the current token.
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, "th");
+			current_node = open_element_stack_top(o_e_stack);
+
 			//Clear the list of active formatting elements up to the last marker .
 			active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
 			//Switch the insertion mode to "in row ".
@@ -7268,10 +7456,12 @@ void in_cell_mode(token *tk)
 			((strcmp(tk->ett.tag_name, "td") == 0) ||
 			 (strcmp(tk->ett.tag_name, "th") == 0)))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
+			current_node = open_element_stack_top(o_e_stack);
+
 			//Clear the list of active formatting elements up to the last marker .
 			active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
 			//Switch the insertion mode to "in row "
@@ -7298,17 +7488,19 @@ void in_cell_mode(token *tk)
 			 (strcmp(tk->ett.tag_name, "thead") == 0) ||
 			 (strcmp(tk->ett.tag_name, "tr") == 0)))
 	{
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
 			//close the cell and reprocess the current token.
-			if(has_element_in_table_scope((node *)doc_root, current_node, "td", &match_node) == 1) 
+			if(has_element_in_table_scope(o_e_stack, "td", &match_node) == 1) 
 			{
-				current_node = match_node->parent;
+				pop_elements_up_to(&o_e_stack, "td");
+				current_node = open_element_stack_top(o_e_stack);
 			}
-			if(has_element_in_table_scope((node *)doc_root, current_node, "th", &match_node) == 1) 
+			if(has_element_in_table_scope(o_e_stack, "th", &match_node) == 1) 
 			{
-				current_node = match_node->parent;
+				pop_elements_up_to(&o_e_stack, "th");
+				current_node = open_element_stack_top(o_e_stack);
 			}
 		
 			//Clear the list of active formatting elements up to the last marker .
@@ -7347,9 +7539,9 @@ void in_select_mode(token *tk)
 				{
 					//Insert the token's character into the current node .
 
-					if(current_node->type == TEXT_N)
+					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node;
+						text_node *t = (text_node *)current_node->last_child;
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 					}
 					else
@@ -7357,7 +7549,6 @@ void in_select_mode(token *tk)
 						text_node *t = create_text_node();
 						t->text_data = string_append(t->text_data, tk->cht.ch);
 						add_child_node(current_node, (node *)t);
-						current_node = (node *)t;
 					}
 				}
 
@@ -7366,32 +7557,15 @@ void in_select_mode(token *tk)
 		case TOKEN_COMMENT:
 			{
 				comment_node *c = create_comment_node(tk->cmt.comment);
-
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-			
 				add_child_node(current_node, (node *)c);	
 			}
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
-			{
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-			}
 			break;
 		case TOKEN_START_TAG:
 			{
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{
 					//Process the token using the rules for the "in body " insertion mode .
@@ -7400,48 +7574,48 @@ void in_select_mode(token *tk)
 				else if(strcmp(tk->stt.tag_name, "option") == 0)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					element_node *curr_element_node = (element_node *)current_node;
-					//safe to cast type to (element_node *) here.
-					//as the current_node cannot be TEXT_N
-
-					if(strcmp(curr_element_node->name, "option") == 0)
+	
+					if(strcmp(current_node->name, "option") == 0)
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 				}
 				else if(strcmp(tk->stt.tag_name, "optgroup") == 0)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					element_node *curr_element_node;
-
-					curr_element_node = (element_node *)current_node;
-					if(strcmp(curr_element_node->name, "option") == 0)
+		
+					if(strcmp(current_node->name, "option") == 0)
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
-					curr_element_node = (element_node *)current_node;
-					if(strcmp(curr_element_node->name, "optgroup") == 0)
+					if(strcmp(current_node->name, "optgroup") == 0)
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 				}
 				else if(strcmp(tk->stt.tag_name, "select") == 0)
 				{
 					//parse error . Act as if the token had been an end tag with the tag name "select" instead.
-					node *match_node;
-					if(has_element_in_select_scope((node *)doc_root, current_node, "select", &match_node) == 1) 
+					element_node *match_node;
+					if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "select");
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Reset the insertion mode appropriately.
-						current_mode = reset_insertion_mode((node *)doc_root, current_node);
+						current_mode = reset_insertion_mode(o_e_stack);
 					}
 					else
 					{
@@ -7455,13 +7629,14 @@ void in_select_mode(token *tk)
 					//parse error.
 					//If the stack of open elementsdoes not have a select element in select scope, ignore the token.
 					//Otherwise, act as if an end tag with the tag name "select" had been seen, and reprocess the token.
-					node *match_node;
-					if(has_element_in_select_scope((node *)doc_root, current_node, "select", &match_node) == 1) 
+					element_node *match_node;
+					if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "select");
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Reset the insertion mode appropriately.
-						current_mode = reset_insertion_mode((node *)doc_root, current_node);
+						current_mode = reset_insertion_mode(o_e_stack);
 						token_process = REPROCESS;
 					}
 					else
@@ -7482,25 +7657,18 @@ void in_select_mode(token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if(current_node->type == TEXT_N)
-				{
-					current_node = current_node->parent;
-				}
-
 				if(strcmp(tk->ett.tag_name, "optgroup") == 0)
 				{
-					element_node *curr_element_node = (element_node *)current_node;
-					//safe to cast type
-
-					if(strcmp(curr_element_node->name, "option") == 0)
+					if(strcmp(current_node->name, "option") == 0)
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 
-					curr_element_node = (element_node *)current_node;
-					if(strcmp(curr_element_node->name, "optgroup") == 0)
+					if(strcmp(current_node->name, "optgroup") == 0)
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					else
 					{
@@ -7509,11 +7677,10 @@ void in_select_mode(token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "option") == 0)
 				{
-					element_node *curr_element_node = (element_node *)current_node;
-						
-					if(strcmp(curr_element_node->name, "option") == 0)
+					if(strcmp(current_node->name, "option") == 0)
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 					}
 					else
 					{
@@ -7523,13 +7690,14 @@ void in_select_mode(token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "select") == 0)
 				{
-					node *match_node;
-					if(has_element_in_select_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+					element_node *match_node;
+					if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 					{
-						current_node = match_node->parent;
+						pop_elements_up_to(&o_e_stack, "select");
+						current_node = open_element_stack_top(o_e_stack);
 
 						//Reset the insertion mode appropriately.
-						current_mode = reset_insertion_mode((node *)doc_root, current_node);
+						current_mode = reset_insertion_mode(o_e_stack);
 					}
 					else
 					{
@@ -7564,13 +7732,14 @@ void in_select_in_table_mode(token *tk)
 		(strcmp(tk->stt.tag_name, "th") == 0)))
 	{
 		//parse error . Act as if an end tag with the tag name "select" had been seen, and reprocess the token.
-		node *match_node;
-		if(has_element_in_select_scope((node *)doc_root, current_node, "select", &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 		{
-			current_node = match_node->parent;
+			pop_elements_up_to(&o_e_stack, "select");
+			current_node = open_element_stack_top(o_e_stack);
 
 			//Reset the insertion mode appropriately.
-			current_mode = reset_insertion_mode((node *)doc_root, current_node);
+			current_mode = reset_insertion_mode(o_e_stack);
 			token_process = REPROCESS;
 		}
 		else
@@ -7589,15 +7758,16 @@ void in_select_in_table_mode(token *tk)
 			 (strcmp(tk->ett.tag_name, "th") == 0)))
 	{
 		//parse error
-		node *match_node;
-		if(has_element_in_table_scope((node *)doc_root, current_node, tk->ett.tag_name, &match_node) == 1) 
+		element_node *match_node;
+		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			if(has_element_in_select_scope((node *)doc_root, current_node, "select", &match_node) == 1) 
+			if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 			{
-				current_node = match_node->parent;
+				pop_elements_up_to(&o_e_stack, "select");
+				current_node = open_element_stack_top(o_e_stack);
 
 				//Reset the insertion mode appropriately.
-				current_mode = reset_insertion_mode((node *)doc_root, current_node);
+				current_mode = reset_insertion_mode(o_e_stack);
 				token_process = REPROCESS;
 			}
 			else
@@ -7649,12 +7819,12 @@ void after_body_mode(token *tk)
 			//append comment node to the first element in the stack of open elements (the html element),
 			//with the data attribute set to the data given in the comment token.
 			{
-				element_node *html_node = get_node_by_name((node *)doc_root, current_node, "html");
+				element_node *html_node = get_node_by_name(o_e_stack, "html");
 				comment_node *c = create_comment_node(tk->cmt.comment);
 
 				if(html_node != NULL)
 				{
-					add_child_node((node *)html_node, (node *)c);
+					add_child_node(html_node, (node *)c);
 				}
 			}
 			break;
@@ -7703,6 +7873,10 @@ void after_body_mode(token *tk)
 			//stop parsing;
 			break;
 		default:
+			{
+				current_mode = IN_BODY;
+				token_process = REPROCESS;
+			}
 			break;
 	}
 
@@ -7741,11 +7915,13 @@ void in_frameset_mode(token *tk)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					current_node = (node *)e;
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
 				}
 				else if(strcmp(tk->stt.tag_name, "frame") == 0)
 				{
-					//Insert an HTML element for the token. Immediately pop the current node off the stack of open elements .
+					//Insert an HTML element for the token. 
+					//Immediately pop the current node off the stack of open elements .
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
 					//Acknowledge the token's self-closing flag , if it is set.
@@ -7765,18 +7941,17 @@ void in_frameset_mode(token *tk)
 			{
 				if(strcmp(tk->ett.tag_name, "frameset") == 0)
 				{
-					element_node *curr_element_node = (element_node *)current_node;
-					if(strcmp(curr_element_node->name, "html") == 0)
+					if(strcmp(current_node->name, "html") == 0)
 					{
 						;//parse error, ignore the token
 					}
 					else
 					{
-						current_node = current_node->parent;
+						open_element_stack_pop(&o_e_stack); 
+						current_node = open_element_stack_top(o_e_stack);
 						//If the parser was not originally created as part of the HTML fragment parsing algorithm (fragment case ), 
 						//and the current node is no longer a frameset element, then switch the insertion mode to "after frameset".
-						curr_element_node = (element_node *)current_node;
-						if(strcmp(curr_element_node->name, "frameset") != 0)
+						if(strcmp(current_node->name, "frameset") != 0)
 						{
 							current_mode = AFTER_FRAMESET;
 						}
@@ -7888,7 +8063,7 @@ void after_after_body_mode(token *tk)
 			//the data given in the comment token.
 			{
 				comment_node *c = create_comment_node(tk->cmt.comment);
-				add_child_node((node *)doc_root, (node *)c);
+				add_child_node(doc_root, (node *)c);
 			}
 			break;
 		case TOKEN_DOCTYPE:
@@ -7923,6 +8098,10 @@ void after_after_body_mode(token *tk)
 			//stop parsing;
 			break;
 		default:
+			{
+				current_mode = IN_BODY;
+				token_process = REPROCESS;
+			}
 			break;
 	}
 }
@@ -7941,12 +8120,14 @@ void after_after_frameset_mode(token *tk)
 			{
 				//Append a Comment node to the Document object with the data attribute set to the data given in the comment token.
 				comment_node *c = create_comment_node(tk->cmt.comment);
-				add_child_node((node *)doc_root, (node *)c);
+				add_child_node(doc_root, (node *)c);
 			}
 			break;
 		case TOKEN_DOCTYPE:
-			//parse error
-			//ignore the token
+			{
+				//Process the token using the rules for the "in body " insertion mode
+				in_body_mode(tk);
+			}
 			break;
 		case TOKEN_START_TAG:
 		    {
@@ -7981,74 +8162,75 @@ void after_after_frameset_mode(token *tk)
 
 
 /*------------------------------------------------------------------------------------*/	
-insertion_mode reset_insertion_mode(node *root, node *current_node)
+/*use this function in non-fragment cases*/
+insertion_mode reset_insertion_mode(element_stack *st)
 {
-	element_node *temp_element_node;
-	
-	if(current_node->type != ELEMENT_N)
-	{
-		current_node = current_node->parent;
-	}
+	element_node *temp_element;
 
-	temp_element_node = (element_node *)current_node;
-
-	while((node *)temp_element_node != root)
+	while(st != NULL)
 	{
-		if(strcmp(temp_element_node->name, "select") == 0)
+		temp_element = open_element_stack_top(st);
+
+		if(strcmp(temp_element->name, "select") == 0)
 		{
 			return IN_SELECT;
 		}
-		else if((strcmp(temp_element_node->name, "td") == 0) ||
-				(strcmp(temp_element_node->name, "th") == 0))
+		else if((strcmp(temp_element->name, "td") == 0) ||
+				(strcmp(temp_element->name, "th") == 0))
 		{
 			return IN_CELL;
 		}
-		else if(strcmp(temp_element_node->name, "tr") == 0)
+		else if(strcmp(temp_element->name, "tr") == 0)
 		{
 			return IN_ROW;
 		}
-		else if((strcmp(temp_element_node->name, "tbody") == 0) ||
-				(strcmp(temp_element_node->name, "thead") == 0) ||
-				(strcmp(temp_element_node->name, "tfoot") == 0))
+		else if((strcmp(temp_element->name, "tbody") == 0) ||
+				(strcmp(temp_element->name, "thead") == 0) ||
+				(strcmp(temp_element->name, "tfoot") == 0))
 		{
 			return IN_TABLE_BODY;
 		}
-		else if(strcmp(temp_element_node->name, "caption") == 0)
+		else if(strcmp(temp_element->name, "caption") == 0)
 		{
 			return IN_CAPTION;
 		}
-		else if(strcmp(temp_element_node->name, "colgroup") == 0)
+		else if(strcmp(temp_element->name, "colgroup") == 0)
 		{
 			return IN_COLUMN_GROUP;
 		}
-		else if(strcmp(temp_element_node->name, "table") == 0)
+		else if(strcmp(temp_element->name, "table") == 0)
 		{
 			return IN_TABLE;
 		}
-		else if(strcmp(temp_element_node->name, "head") == 0)
+		else if(strcmp(temp_element->name, "head") == 0)
 		{
 			return IN_BODY;
 		}
-		else if(strcmp(temp_element_node->name, "body") == 0)
+		else if(strcmp(temp_element->name, "body") == 0)
 		{
 			return IN_BODY;
 		}
-		else if(strcmp(temp_element_node->name, "frameset") == 0)
+		else if(strcmp(temp_element->name, "frameset") == 0)
 		{
 			return IN_FRAMESET;
 		}
-		else if(strcmp(temp_element_node->name, "html") == 0)
+		else if(strcmp(temp_element->name, "html") == 0)
 		{
 			return BEFORE_HEAD;
 		}
+		else
+		{
+			return IN_BODY;			//fragment case
+		}
 
-		temp_element_node = (element_node *)temp_element_node->parent;
+		st = previous_stack_node(st);
 	}
 
 	return IN_BODY;
 }
 
 /*------------------------------------------------------------------------------------*/
+/*use this function in fragment cases*/
 insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name)
 {
 

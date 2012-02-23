@@ -25,7 +25,7 @@ active_formatting_list *active_formatting_list_add_marker(active_formatting_list
 element_node *is_in_active_formatting_list(active_formatting_list *list, element_node *e);
 element_node *get_formatting_element(active_formatting_list *list, unsigned char *tag_name);
 active_formatting_list *remove_element_from_active_formatting_list(active_formatting_list *list, element_node *e);
-node *reconstruct_active_formatting_elements(active_formatting_list *list, node *root, node *current_node);
+element_node *reconstruct_active_formatting_elements(active_formatting_list *list, element_stack **o_e_st);
 active_formatting_list *clear_list_up_to_last_marker(active_formatting_list *list);
 int replace_element_in_active_formatting_list(active_formatting_list *list, 
 													element_node *element_to_be_replaced,
@@ -34,11 +34,15 @@ active_formatting_list *insert_bookmark_in_active_formatting_list(active_formatt
 active_formatting_list *remove_bookmark_from_active_formatting_list(active_formatting_list *list, active_formatting_list *book_mark);
 
 int element_compare(element_node *e1, element_node *e2);
-int is_open_element(node *root, node* current_node, element_node *e);
+int is_open_element(element_stack *st, element_node *e);
 void print_active_formatting_list(active_formatting_list *list);
  
-element_node *get_furthest_block(node *root, node *current_node, element_node *formatting_ele);
+element_node *get_furthest_block(element_stack *o_e_st, element_node *formatting_ele);
 
-void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, node **current_node_ptr, 
+/*void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, element_node **current_node_ptr, 
 								unsigned char *formatting_element_name);
+*/
+void adoption_agency_algorithm(active_formatting_list **list_ptr, element_stack **o_e_st_ptr,
+							   element_node **current_node_ptr, unsigned char *formatting_element_name);
+
 /*------------------------------------------------------------------------*/

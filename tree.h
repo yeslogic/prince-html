@@ -76,7 +76,7 @@ element_node *create_element_node(unsigned char *name, attribute_list *attribute
 text_node *create_text_node(void);
 comment_node *create_comment_node(unsigned char *comment);
 
-void add_child_node(node *parent, node *child_node);
+void add_child_node(element_node *parent, node *child_node);
 void insert_child_node(node *parent, node *child_node, node *child_2);
 void remove_last_child_node(node *parent);
 void remove_child_node_from_parent(node *child_node);

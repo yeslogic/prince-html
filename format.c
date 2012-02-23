@@ -5,7 +5,6 @@
 #include "format.h"
 
 
-
 /*-----------------------------------------------------------------------------------------*/
 active_formatting_list *active_formatting_list_add_element(element_node *formatting_element,
 														   active_formatting_list *tail)
@@ -322,29 +321,20 @@ int element_compare(element_node *e1, element_node *e2)
 }
 
 
-/*returns 1 if e is a node on the path from current_node up to root.
-  otherwise return 0. 
-*/
-int is_open_element(node *root, node* current_node, element_node *e)
+/*returns 1 if e is in the stack of open elements, otherwise return 0. */
+int is_open_element(element_stack *st, element_node *e)
 {
-	while(current_node != root)
-	{	
-		if(current_node == (node *)e)
-		{
-			return 1;
-		}
-
-		current_node = current_node->parent;
-	}
-
-	return 0;
+	return is_on_element_stack(st, e);
 }
 
 
 /*return the new current node after reconstructing the active formatting list*/
 /*or return the old current node if nothing to be reconstructed*/
-node *reconstruct_active_formatting_elements(active_formatting_list *list, node *root, node *current_node)
+element_node *reconstruct_active_formatting_elements(active_formatting_list *list, element_stack **o_e_st)
 {
+	//initialise current_node
+	element_node *current_node = open_element_stack_top(*o_e_st);
+
 	if(list == NULL)
 	{
 		return current_node;	//nothing to be reconstructed
@@ -353,10 +343,10 @@ node *reconstruct_active_formatting_elements(active_formatting_list *list, node 
 	{
 		active_formatting_list *entry;
 		element_node *entry_element, *new_element;
-		node *curr_node = current_node;;
+		element_node *curr_node = current_node;;
 
 		if((list->type == MARKER) || 
-			((list->type == FORMATTING_ELEMENT) && (is_open_element(root, current_node, list->formatting_element) == 1)))
+			((list->type == FORMATTING_ELEMENT) && (is_open_element(*o_e_st, list->formatting_element) == 1)))
 		{
 			return current_node;		//nothing to be reconstructed
 		}
@@ -369,7 +359,7 @@ node *reconstruct_active_formatting_elements(active_formatting_list *list, node 
 			
 			//if entry is neither a marker nor an element that is also in the stack of open elements , go back to beginning of loop.
 			if((entry->type == MARKER) || 
-				((entry->type == FORMATTING_ELEMENT) && (is_open_element(root, current_node, entry->formatting_element) == 1)))
+				((entry->type == FORMATTING_ELEMENT) && (is_open_element(*o_e_st, entry->formatting_element) == 1)))
 			{
 				//let "entry" be the element one later than "entry" in the list of active formatting elements.
 				entry = entry->head;
@@ -391,7 +381,8 @@ node *reconstruct_active_formatting_elements(active_formatting_list *list, node 
 
 			//Append new element to the current node and push it onto the stack of open elements so that it is the new current node .
 			add_child_node(curr_node, (node *)new_element);
-			curr_node = (node *)new_element;
+			open_element_stack_push(o_e_st, new_element);
+			curr_node = open_element_stack_top(*o_e_st);
 			
 			//Replace the entry for entry in the list with an entry for new element.
 			entry->formatting_element = new_element;
@@ -468,50 +459,47 @@ void print_active_formatting_list(active_formatting_list *list)
 //the stack than the formatting element, and is an element in the special category.
 //if there is one, return a pointer to it, otherwise return NULL.
 
-element_node *get_furthest_block(node *root, node *current_node, element_node *formatting_ele)
+element_node *get_furthest_block(element_stack *o_e_st, element_node *formatting_ele)
 {
 	element_node *topmost_lower_than_formatting_ele;
+	element_node *current_node = open_element_stack_top(o_e_st);
 
-	if(is_open_element(root, current_node, formatting_ele) == 0)
+	if(is_open_element(o_e_st, formatting_ele) == 0)
 	{
 		return NULL;	//formatting_ele in not in the stack of open elements.
 	}
 
-	if(current_node == (node *)formatting_ele)
+	if(current_node == formatting_ele)
 	{
 		return NULL;	//no nodes lower than formatting_ele in the stack.
 	}
 
 	topmost_lower_than_formatting_ele = NULL;
-	while(current_node != (node *)formatting_ele)
+	while(current_node != formatting_ele)
 	{	
-		if(current_node->type == ELEMENT_N)
+		if(is_in_special_category(current_node) == 1)
 		{
-			if(is_in_special_category((element_node *)current_node) == 1)
-			{
-				topmost_lower_than_formatting_ele = (element_node *)current_node;
+			topmost_lower_than_formatting_ele = current_node;
 
-				//the topmost element below formatting_ele that is in the special category
-				//will be the one assigned to topmost_lower_than_formatting_ele at the end
-				//if there is none satisfies the condition, it will be NULL.
-			}
+			//the topmost element below formatting_ele that is in the special category
+			//will be the one assigned to topmost_lower_than_formatting_ele at the end
+			//if there is none satisfies the condition, it will be NULL.
 		}
 
-		current_node = current_node->parent;
+		o_e_st = previous_stack_node(o_e_st);	//move to the previous node in the stack
+		current_node = open_element_stack_top(o_e_st);	//get element of the stack node
 	}
 
 	return topmost_lower_than_formatting_ele;
 }
 
-
-
-
+                                                                     
 /*---------------------------//adoption agency algorithm--------------------------------------*/
-void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, node **current_node_ptr, 
-								unsigned char *formatting_element_name)
+void adoption_agency_algorithm(active_formatting_list **list_ptr, element_stack **o_e_st_ptr,
+							   element_node **current_node_ptr, unsigned char *formatting_element_name)
 {
 	element_node *formatting_ele;
-	node *match_node;
+	element_node *match_node;
 	int i, j;
 
 	//outer loop
@@ -522,22 +510,18 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 		{
 			//there is no such node, abort these steps and instead act as described in the "any other end tag" entry below.
 			/*-------------------------------------------------------*/
-			node *temp_node = *current_node_ptr;
-						
-			if(temp_node->type != ELEMENT_N)
+			element_stack *temp_stack = *o_e_st_ptr;
+			element_node *temp_element;
+					
+			while(temp_stack != NULL)
 			{
-				temp_node = temp_node->parent;
-			}
+				temp_element = open_element_stack_top(temp_stack);
 
-			while(temp_node != root)
-			{
-				element_node *temp_element = (element_node *)temp_node;
-						
 				if(strcmp(temp_element->name, formatting_element_name) == 0)
 				{
-					//pop all the nodes from current_node upward, including "temp_element"
-					*current_node_ptr = temp_element->parent;
-					break;	 
+					pop_elements_up_to(o_e_st_ptr, formatting_element_name);
+					*current_node_ptr = open_element_stack_top(*o_e_st_ptr);
+					break;
 				}
 				else if(is_in_special_category(temp_element) == 1)
 				{
@@ -545,14 +529,14 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 				}
 				else
 				{
-					temp_node = temp_node->parent;
+					temp_stack = previous_stack_node(temp_stack);
 				}
-			}
 
+			}
 			/*--------------------------------------------------------*/
 			break;
 		}
-		else if(is_open_element(root, *current_node_ptr, formatting_ele) == 0)
+		else if(is_open_element(*o_e_st_ptr, formatting_ele) == 0)
 		{
 			//there is such a node, but that node is not in the stack of open elements
 			//this is a parse error ; remove the element from the list, and abort these steps.
@@ -560,7 +544,7 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 			remove_element_from_active_formatting_list(*list_ptr, formatting_ele);
 			break;
 		}
-		else if(has_element_in_scope(root, *current_node_ptr, formatting_ele->name, &match_node) == 0)
+		else if(has_element_in_scope(*o_e_st_ptr, formatting_ele->name, &match_node) == 0)
 		{
 			//there is such a node, and that node is also in the stack of open elements , 
 			//but the element is not in scope, 
@@ -571,7 +555,7 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 		{
 			element_node *furthest_block;
 
-			furthest_block = get_furthest_block(root, *current_node_ptr, formatting_ele);
+			furthest_block = get_furthest_block(*o_e_st_ptr, formatting_ele);
 
 			if(furthest_block == NULL)
 			{
@@ -579,30 +563,59 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 				//all the nodes from the bottom of the stack of open elements , from the current node up
 				//to and including the formatting element, and remove the formatting element from the list of
 				//active formatting elements
-				*current_node_ptr = formatting_ele->parent;
+				
+				pop_ele_up_to(o_e_st_ptr, formatting_ele);
+				*current_node_ptr = open_element_stack_top(*o_e_st_ptr);
+
 				*list_ptr = remove_element_from_active_formatting_list(*list_ptr, formatting_ele);
 				break;		//breaking out of the outer loop
 			}
 			else
 			{
-				element_node *common_ancestor = (element_node *)formatting_ele->parent;
+				element_stack *stack_node_before_formatting_ele, *temp_stack_node;
+				element_node *common_ancestor;
 				element_node *this_node = furthest_block, *last_node = furthest_block;
-				element_node *new_element, *new_element_for_formatting_ele;
+				element_node *node_above_this_node_before_removed, *new_element, *new_element_for_formatting_ele;
 				active_formatting_list *book_mark;
 								
+				stack_node_before_formatting_ele = stack_node_before_element(*o_e_st_ptr, formatting_ele);
+				common_ancestor = open_element_stack_top(stack_node_before_formatting_ele);	//common_ancestor cannot be NULL
 				*list_ptr = insert_bookmark_in_active_formatting_list(*list_ptr, formatting_ele, &book_mark);
 
 				//inner loop
 				for(j = 0; j < 3; j++)
 				{
-					this_node = (element_node *)this_node->parent;
+					//Let node be the element immediately above node in the stack of open elements,
+					//or if node is no longer in the stack of open elements (e.g. because it got removed
+					//by the next step), the element that was immediately above node in the stack of open
+					//elements before node was removed.
+
+					/*this_node = (element_node *)this_node->parent;*/
+
+					if(is_open_element(*o_e_st_ptr, this_node) == 1)
+					{
+						//make this_node the element immediately above this_node in the stack of open elements,
+						temp_stack_node = stack_node_before_element(*o_e_st_ptr, this_node);
+						this_node = open_element_stack_top(temp_stack_node);
+					}
+					else
+					{
+						//this_node got removed, but we remember the node that was above this_node:
+						//(the first loop will not come to this branch, as this_node is in the stack)
+						this_node = node_above_this_node_before_removed;
+					}
+					//remember the node above this node before it gets removed, possibly:
+					temp_stack_node = stack_node_before_element(*o_e_st_ptr, this_node);
+					node_above_this_node_before_removed = open_element_stack_top(temp_stack_node);
+
 
 					if(is_in_active_formatting_list(*list_ptr, this_node) == NULL)
 					{
 						//if this_node is not in the list of active formatting elements, then remove this_node from the
 						//stack of open elements and then go back to the step labeled "inner loop".
 						//we basically skip this_node and go to the next node up, in next loop.
-						;
+						remove_element_from_stack(o_e_st_ptr, this_node);
+						*current_node_ptr = open_element_stack_top(*o_e_st_ptr); //update current_node in case it has changed
 					}
 					else if(this_node == formatting_ele)
 					{
@@ -613,10 +626,16 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 					{
 						new_element = create_element_node(this_node->name, this_node->attributes, this_node->name_space);
 									
-						//replace entry for this_node with the new_element.
+						//replace entry for this_node with the new_element in the list of active formatting elements.
 						//this_node must be in the list of active formatting elements, at this point.
 						replace_element_in_active_formatting_list(*list_ptr, this_node, new_element);
-										
+
+						//replace the entry for this_node in the stack of open elements with an
+						//entry for the new element, and let this_node be the new element.
+						replace_element_in_stack(*o_e_st_ptr, this_node, new_element);
+						this_node = new_element;
+						*current_node_ptr = open_element_stack_top(*o_e_st_ptr); //update current_node in case it has changed
+
 						if(last_node == furthest_block)
 						{
 							*list_ptr = remove_bookmark_from_active_formatting_list(*list_ptr, book_mark);
@@ -624,12 +643,13 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 							*list_ptr = insert_bookmark_in_active_formatting_list(*list_ptr, new_element, &book_mark);
 						}
 
-						//Insert last_node into new_element, first removing it from its previous parent node if any.
+						//Insert last_node into this_node(new_element), first removing it from its previous parent node if any.
 						remove_child_node_from_parent((node *)last_node);
 										
-						add_child_node((node *)new_element, (node *)last_node);
+						add_child_node(this_node, (node *)last_node);
 
-						last_node = new_element;
+						//Let last node be this_node.
+						last_node = this_node;
 
 					}
 				}
@@ -642,11 +662,11 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 					      (strcmp(common_ancestor->name, "thead") == 0) ||
 			              (strcmp(common_ancestor->name, "tr") == 0))
 				{
-					add_child_to_foster_parent(root, (node *)common_ancestor, (node *)last_node);		
+					add_child_to_foster_parent(*o_e_st_ptr, (node *)last_node);
 				}
 				else
 				{
-					add_child_node((node *)common_ancestor, (node *)last_node);
+					add_child_node(common_ancestor, (node *)last_node);
 				}
 
 				//Create an element for the token for which the formatting element was created.
@@ -665,7 +685,7 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 					{
 						next_sibling_of_child_node = child_node->next_sibling;
 
-						add_child_node((node *)new_element_for_formatting_ele, child_node);
+						add_child_node(new_element_for_formatting_ele, child_node);
 										
 						child_node = next_sibling_of_child_node;;
 					}
@@ -675,7 +695,7 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 				}
 
 				//Append that new element to the furthest block
-				add_child_node((node *)furthest_block, (node *)new_element_for_formatting_ele);
+				add_child_node(furthest_block, (node *)new_element_for_formatting_ele);
 								
 				//Remove the formatting element from the list of active formatting elements
 				*list_ptr = remove_element_from_active_formatting_list(*list_ptr, formatting_ele);
@@ -686,9 +706,14 @@ void adoption_agency_algorithm(node *root, active_formatting_list **list_ptr, no
 
 				book_mark->formatting_element = new_element_for_formatting_ele;
 								
-				//Step 15, make new_element_for_formatting_ele the current_node;
-				*current_node_ptr = (node *)new_element_for_formatting_ele;
+				//Step 15
+				//Remove the formatting element from the stack of open elements , and insert the new element 
+				//into the stack of open elements immediately below the position of the furthest block in that stack.
+				remove_element_from_stack(o_e_st_ptr, formatting_ele);
+				insert_into_stack_below_element(o_e_st_ptr, new_element_for_formatting_ele, furthest_block);
+				*current_node_ptr = open_element_stack_top(*o_e_st_ptr); //update current_node in case it has changed
 
+				//Step16. Jump back to the step labeled outer loop.
 			}
 		}
 	}

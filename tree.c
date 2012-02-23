@@ -30,7 +30,7 @@ text_node *create_text_node(void)
 	text_node *t = (text_node *)malloc(sizeof(text_node));
 
 	t->type = TEXT_N;
-	t->text_data = NULL;
+	t->text_data = string_append(NULL, '\0');
 	t->parent = NULL;
 	t->first_child = NULL;
 	t->last_child = NULL;
@@ -59,7 +59,7 @@ comment_node *create_comment_node(unsigned char *comment)
 
 /*parent must not be NULL, child_node must not be NULL*/
 /*child_node will be added as the last child of the parent*/
-void add_child_node(node *parent, node *child_node)
+void add_child_node(element_node *parent, node *child_node)
 {
 	assert((parent != NULL) && (child_node != NULL));
 
