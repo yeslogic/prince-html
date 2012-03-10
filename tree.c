@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "tree.h"
+#include "util.h"
 
 
 
@@ -75,7 +76,7 @@ void add_child_node(element_node *parent, node *child_node)
 	}
 
 	parent->last_child = child_node;
-	child_node->parent = parent;
+	child_node->parent = (node *)parent;
 	child_node->next_sibling = NULL;
 }
 
@@ -220,6 +221,35 @@ void print_node(node *n)
 					element_node *e = (element_node *)n;
 					printf("Node type: ELEMENT.\n");
 					printf("Element name: %s\n", e->name);
+					printf("Element name space: ---------------------------------------------------- ");
+					if(e->name_space == HTML)
+					{
+						printf("HTML\n");
+					}
+					else if(e->name_space == MATHML)
+					{
+						printf("MATHML\n");
+					}
+					else if(e->name_space == SVG)
+					{
+						printf("SVG\n");
+					}
+					else if(e->name_space == XLINK)
+					{
+						printf("XLINK\n");
+					}
+					else if(e->name_space == XML)
+					{
+						printf("XML\n");
+					}
+					else if(e->name_space == XMLNS)
+					{
+						printf("XMLNS\n");
+					}
+					else
+					{
+						;
+					}
 					html_print_attribute_list(e->attributes);
 					print_parent_node(n);
 					print_child_nodes(n);
