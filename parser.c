@@ -6113,7 +6113,10 @@ void in_body_mode(token *tk)
 					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 					
 					//Adjust MathML attributes for the token. (This fixes the case of MathML attributes that are not all lowercase.)
+					adjust_mathml_attributes(tk->stt.attributes);
+
 					//Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink.)
+
 					//Insert a foreign element for the token, in the MathML namespace .
 					//If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag .
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, MATHML);
@@ -6144,6 +6147,8 @@ void in_body_mode(token *tk)
 					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
 
 					//Adjust SVG attributes for the token. (This fixes the case of SVG attributes that are not all lowercase.)
+					adjust_svg_attributes(tk->stt.attributes);
+
 					//Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink in SVG.)
 					
 					//Insert a foreign element for the token, in the SVG namespace .
