@@ -150,7 +150,8 @@ void free_attributes(attribute_list *list)
 /*-------------------------------------------------------------*/
 /*add the name-value pair to the end of attr_list*/
 attribute_list *html_attribute_list_cons(unsigned char *name, 
-										 unsigned char *value, 
+										 unsigned char *value,
+										 namespace_type attr_name_space,
 										 attribute_list *attr_list)
 
 {
@@ -165,6 +166,7 @@ attribute_list *html_attribute_list_cons(unsigned char *name,
 
 	list->name = strdup(name);
 	list->value = strdup(value);
+	list->attr_ns = attr_name_space;
 
 	list->tail = NULL;
 
@@ -497,6 +499,33 @@ void html_print_attribute_list(attribute_list *attributes)
     while (attributes != NULL)
     {
 		printf("%s=%s", attributes->name, attributes->value);
+
+		switch (attributes->attr_ns)
+		{	
+			case HTML:
+				printf("(ns-html)");
+				break;
+			case MATHML:
+				printf("(ns-mathml)");
+				break;
+			case SVG:
+				printf("(ns-svg)");
+				break;
+			case XLINK:
+				printf("(ns-xlink)");
+				break;
+			case XML:
+				printf("(ns-xml)");
+				break;
+			case XMLNS:
+				printf("(ns-xmlns)");
+				break;
+			case DEFAULT:
+				printf("(ns-default)");
+				break;
+			default:
+				break;
+		}
 
 		if (attributes->tail != NULL)
 		{

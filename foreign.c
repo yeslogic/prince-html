@@ -4,12 +4,16 @@
 #include <assert.h>
 #include "foreign.h"
 
-#define SVG_ATTRIBUTE_MAX_LENGTH 26
+
+#ifdef WIN32
+#define strcasecmp stricmp
+#endif
+
 #define NUM_SVG_ATTRIBUTES 62
 #define NUM_SVG_START_TAG_NAMES 36
-#define SVG_START_TAG_NAME_MAX_LENGTH 20
 
-const unsigned char svg_attr_names[NUM_SVG_ATTRIBUTES][2][SVG_ATTRIBUTE_MAX_LENGTH] = {
+const unsigned char *svg_attr_names[NUM_SVG_ATTRIBUTES][2]= {
+
 						{"attributename", 				"attributeName"},
 						{"attributetype", 				"attributeType"},
 						{"basefrequency", 				"baseFrequency"},
@@ -75,7 +79,8 @@ const unsigned char svg_attr_names[NUM_SVG_ATTRIBUTES][2][SVG_ATTRIBUTE_MAX_LENG
 };
 
 
-const unsigned char svg_start_tag_names[NUM_SVG_START_TAG_NAMES][2][SVG_START_TAG_NAME_MAX_LENGTH] = {
+const unsigned char *svg_start_tag_names[NUM_SVG_START_TAG_NAMES][2]= {
+
 						{"altglyph",				"altGlyph"},
 						{"altglyphdef",				"altGlyphDef"},
 						{"altglyphitem",			"altGlyphItem"},
@@ -270,24 +275,9 @@ int string_is_text_slash_html(unsigned char *str)
 {
 	if(str != NULL)
 	{	
-		if(strlen(str) == 9)
+		if(strcasecmp(str, "text/html") == 0)
 		{
-			if(((str[0] == 't') || (str[0] == 'T')) &&
-			   ((str[1] == 'e') || (str[1] == 'E')) &&
-			   ((str[2] == 'x') || (str[2] == 'X')) &&
-			   ((str[3] == 't') || (str[3] == 'T')) &&
-			   (str[4] == '/')						&&
-			   ((str[5] == 'h') || (str[5] == 'H')) &&
-			   ((str[6] == 't') || (str[6] == 'T')) &&
-			   ((str[7] == 'm') || (str[7] == 'M')) &&
-			   ((str[8] == 'l') || (str[8] == 'L')))
-			{
-				return 1;
-			}
-			else
-			{
-				return 0;
-			}
+			return 1;
 		}
 		else
 		{
@@ -307,36 +297,9 @@ int string_is_application_slash_xhtml_plus_xml(unsigned char *str)
 {
 	if(str != NULL)
 	{	
-		if(strlen(str) == 21)
+		if(strcasecmp(str, "application/xhtml+xml") == 0)
 		{
-			if(((str[0] == 'a') || (str[0] == 'A')) &&
-			   ((str[1] == 'p') || (str[1] == 'P')) &&
-			   ((str[2] == 'p') || (str[2] == 'P')) &&
-			   ((str[3] == 'l') || (str[3] == 'L')) &&
-			   ((str[4] == 'i')	|| (str[4] == 'I'))	&&
-			   ((str[5] == 'c') || (str[5] == 'C')) &&
-			   ((str[6] == 'a') || (str[6] == 'A')) &&
-			   ((str[7] == 't') || (str[7] == 'T')) &&
-			   ((str[8] == 'i') || (str[8] == 'I'))	&&
-			   ((str[9] == 'o') || (str[9] == 'O')) &&
-			   ((str[10] == 'n') || (str[10] == 'N')) &&
-			   (str[11] == '/')						  &&
-			   ((str[12] == 'x') || (str[12] == 'X')) &&
-			   ((str[13] == 'h') || (str[13] == 'H')) &&
-			   ((str[14] == 't') || (str[14] == 'T')) &&
-			   ((str[15] == 'm') || (str[15] == 'M')) &&
-			   ((str[16] == 'l') || (str[16] == 'L')) &&
-			   (str[17] == '+')						  &&
-			   ((str[18] == 'x') || (str[18] == 'X')) &&
-			   ((str[19] == 'm') || (str[19] == 'M')) &&
-			   ((str[20] == 'l') || (str[20] == 'L')))
-			{
-				return 1;
-			}
-			else
-			{
-				return 0;
-			}
+			return 1;
 		}
 		else
 		{
@@ -348,4 +311,92 @@ int string_is_application_slash_xhtml_plus_xml(unsigned char *str)
 		return 0;
 	}
 
+}
+
+/*----------------------------------------------------------------------*/
+void adjust_foreign_attributes(attribute_list *foreign_attrs)
+{
+	while(foreign_attrs != NULL)
+	{
+		if(strcmp(foreign_attrs->name, "xlink:actuate") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("actuate");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xlink:arcrole") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("arcrole");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xlink:href") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("href");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xlink:role") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("role");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xlink:show") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("show");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xlink:title") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("title");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xlink:type") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("type");
+			foreign_attrs->attr_ns = XLINK;
+		}
+		else if(strcmp(foreign_attrs->name, "xml:base") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("base");
+			foreign_attrs->attr_ns = XML;
+		}
+		else if(strcmp(foreign_attrs->name, "xml:lang") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("lang");
+			foreign_attrs->attr_ns = XML;
+		}
+		else if(strcmp(foreign_attrs->name, "xml:space") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("space");
+			foreign_attrs->attr_ns = XML;
+		}
+		else if(strcmp(foreign_attrs->name, "xmlns") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("xmlns");
+			foreign_attrs->attr_ns = XMLNS;
+
+		}
+		else if(strcmp(foreign_attrs->name, "xmlns:xlink") == 0)
+		{
+			free(foreign_attrs->name);
+			foreign_attrs->name = strdup("xlink");
+			foreign_attrs->attr_ns = XMLNS;
+		}
+		else
+		{
+			;
+		}
+
+
+		foreign_attrs = foreign_attrs->tail; 
+	}
 }

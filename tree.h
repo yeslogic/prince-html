@@ -10,15 +10,6 @@ typedef struct comment_node_s comment_node;
 
 
 /*--------------------------------------------------------------------------*/
-typedef enum {
-	HTML,
-	MATHML,
-	SVG,
-	XLINK,
-	XML,
-	XMLNS
-} namespace_type;
-
 
 typedef enum {
 	ELEMENT_N,

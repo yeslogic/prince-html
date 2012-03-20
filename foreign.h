@@ -16,3 +16,5 @@ int is_html_integration_point(element_node *current_node);
 int string_is_text_slash_html(unsigned char *str);
 
 int string_is_application_slash_xhtml_plus_xml(unsigned char *str);
+
+void adjust_foreign_attributes(attribute_list *foreign_attrs);

@@ -2451,6 +2451,7 @@ token_list *attribute_name_state_s35(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2537,6 +2538,7 @@ token_list *after_attribute_name_state_s36(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2569,6 +2571,7 @@ token_list *after_attribute_name_state_s36(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2598,6 +2601,7 @@ token_list *after_attribute_name_state_s36(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2624,6 +2628,7 @@ token_list *after_attribute_name_state_s36(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2651,6 +2656,7 @@ token_list *after_attribute_name_state_s36(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2720,6 +2726,7 @@ token_list *before_attribute_value_state_s37(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2863,6 +2870,7 @@ token_list *attribute_value_unquoted_state_s40(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -2888,6 +2896,7 @@ token_list *attribute_value_unquoted_state_s40(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -3009,6 +3018,7 @@ token_list *after_attribute_value_quoted_state_s42(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -3032,6 +3042,7 @@ token_list *after_attribute_value_quoted_state_s42(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -3083,6 +3094,7 @@ token_list *self_closing_start_tag_state_s43(unsigned char *ch)
 		{
 			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
 																  curr_attr_value, 
+																  DEFAULT,
 																  curr_token->stt.attributes);
 		}
 		free(curr_attr_name);
@@ -5185,7 +5197,7 @@ void in_body_mode(token *tk)
 								if(attribute_name_in_list(temp_ptr->name, html_node->attributes) == 0)
 								{
 									html_node->attributes = 
-										html_attribute_list_cons(temp_ptr->name, temp_ptr->value, html_node->attributes);
+										html_attribute_list_cons(temp_ptr->name, temp_ptr->value, temp_ptr->attr_ns, html_node->attributes);
 								}
 							}
 
@@ -5226,6 +5238,7 @@ void in_body_mode(token *tk)
 							{
 								body_node->attributes = html_attribute_list_cons(curr_token_attrs->name, 
 																				 curr_token_attrs->value, 
+																				 curr_token_attrs->attr_ns,
 																				 body_node->attributes);
 							}
 
@@ -5869,7 +5882,7 @@ void in_body_mode(token *tk)
 						action_attr_val = get_attribute_value("action", tk->stt.attributes);
 						if(action_attr_val != NULL)
 						{
-							form_e->attributes = html_attribute_list_cons("action", action_attr_val, form_e->attributes);
+							form_e->attributes = html_attribute_list_cons("action", action_attr_val, DEFAULT, form_e->attributes);
 						}
 						
 						hr_e_1 = create_element_node("hr", NULL, HTML);
@@ -5907,7 +5920,7 @@ void in_body_mode(token *tk)
 						input_e->attributes = remove_attribute("prompt", input_e->attributes);
 
 						//Set the name attribute of the resulting input element to the value "isindex".
-						input_e->attributes = html_attribute_list_cons("name", "isindex", input_e->attributes);
+						input_e->attributes = html_attribute_list_cons("name", "isindex", DEFAULT, input_e->attributes);
 						add_child_node(current_node, (node *)input_e);		//add input_e to the form element.
 
 						hr_e_2 = create_element_node("hr", NULL, HTML);
@@ -6116,6 +6129,7 @@ void in_body_mode(token *tk)
 					adjust_mathml_attributes(tk->stt.attributes);
 
 					//Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink.)
+					adjust_foreign_attributes(tk->stt.attributes);
 
 					//Insert a foreign element for the token, in the MathML namespace .
 					//If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag .
@@ -6150,6 +6164,7 @@ void in_body_mode(token *tk)
 					adjust_svg_attributes(tk->stt.attributes);
 
 					//Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink in SVG.)
+					adjust_foreign_attributes(tk->stt.attributes);
 					
 					//Insert a foreign element for the token, in the SVG namespace .
 					//If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
@@ -8481,6 +8496,7 @@ void parse_token_in_foreign_content(token *tk)
 					}
 
 					//Adjust foreign attributes for the token.
+					adjust_foreign_attributes(tk->stt.attributes);
 
 					//Insert a foreign element for the token, in the same namespace as the current node
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, current_node->name_space);

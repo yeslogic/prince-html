@@ -32,10 +32,22 @@ typedef enum {
 	OFF
 } force_quirks_flag_type;
 
+
+typedef enum {
+	HTML,
+	MATHML,
+	SVG,
+	XLINK,
+	XML,
+	XMLNS,
+	DEFAULT
+} namespace_type;
+
 /***********************************************/
 struct attribute_list_s {
 	unsigned char *name;
 	unsigned char *value;
+	namespace_type attr_ns;
 	attribute_list *tail;
 };
 
@@ -96,6 +108,7 @@ token_list *html_token_list_get_tail(token_list *tk_list);
 
 attribute_list *html_attribute_list_cons(unsigned char *name, 
 										 unsigned char *value, 
+										 namespace_type attr_name_space,
 										 attribute_list *attr_list);
 
 int attr_list_comp(attribute_list *attr1, attribute_list *attr2);
