@@ -14,6 +14,14 @@ int replacement_for_disallowed_char(unsigned int char_to_check, unsigned int *re
   so is any previously allocated block str maybe pointing to)*/
 unsigned char *string_append(unsigned char *str, unsigned char ch);
 
+/*appends the first num of characters str2 to the end of str1, allocating memory dynamically.
+  returns the concatinated string, which might be in a different memory location.
+  if str2 is NULL or num is 0,  str1 is returned unchanged.
+  if str1 is NULL, return a new string with the first num characters from str2.
+ 
+  pre-condition: num <= length of str2 */
+unsigned char *string_n_append(unsigned char *str1, unsigned char *str2, long num);
+
 /*returns pointer to buffer holding entire document, or NULL if unsuccessful*/
 unsigned char *read_file(unsigned char *file_name, long *length);
 

@@ -157,6 +157,49 @@ unsigned char *string_append(unsigned char *str, unsigned char ch)
 
 }
 /*--------------------------------------------------------------*/
+/*appends the first num of characters str2 to the end of str1, allocating memory dynamically.
+  returns the concatenated string, which might be in a different memory location.
+  if str2 is NULL or num is 0,  str1 is returned unchanged.
+  if str1 is NULL, return a new string with the first num characters from str2.
+ 
+  pre-condition: num <= length of str2
+*/
+unsigned char *string_n_append(unsigned char *str1, unsigned char *str2, long num)
+{
+	if((str2 != NULL) && (num > 0))
+	{
+		unsigned char *str;
+		/*
+		long str2_len = strlen(str2);
+
+		if(num > str2_len)
+		{
+			num = str2_len;
+		}
+		*/
+
+		if(str1 == NULL)
+		{
+			str = malloc(num + 1);
+			strncpy(str, str2, num);
+			str[num] = '\0';
+		}
+		else
+		{
+			str = malloc(strlen(str1) + num + 1);
+			strcpy(str, str1);
+			free(str1);
+			strncat(str, str2, num);
+		}
+
+		return str;
+	}
+	else
+	{
+		return str1;
+	}
+}
+/*--------------------------------------------------------------*/
 /*returns 1 if ch is a hex digit, otherwise return 0*/
 int is_hex_digit(unsigned char ch)
 {
