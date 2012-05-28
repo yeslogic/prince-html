@@ -174,7 +174,7 @@ unsigned char *adjust_svg_start_tag_name(unsigned char *svg_start_tag_name)
 	{
 		if(strcmp(svg_start_tag_names[i][0], svg_start_tag_name) == 0)
 		{
-			free(svg_start_tag_name);
+			//free(svg_start_tag_name);
 
 			return strdup(svg_start_tag_names[i][1]);
 		}

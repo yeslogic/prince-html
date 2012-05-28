@@ -197,28 +197,28 @@ token_list *cdata_section_state_s68(unsigned char *ch);
 
 /*---------------------TREE CONSTRUCTION FUNCTIONS------------------------*/
 /*------------------------------------------------------------------------*/
-void initial_mode(token *tk);
-void before_html_mode(token *tk);
-void before_head_mode(token *tk);
-void in_head_mode(token *tk);
-void in_head_noscript_mode(token *tk);
-void after_head_mode(token *tk);
-void in_body_mode(token *tk);
-void text_mode(token *tk);
-void in_table_mode(token *tk);
-void in_table_text_mode(token *tk);
-void in_caption_mode(token *tk);
-void in_column_group_mode(token *tk);
-void in_table_body_mode(token *tk);
-void in_row_mode(token *tk);
-void in_cell_mode(token *tk);
-void in_select_mode(token *tk);
-void in_select_in_table_mode(token *tk);
-void after_body_mode(token *tk);
-void in_frameset_mode(token *tk);
-void after_frameset_mode(token *tk);
-void after_after_body_mode(token *tk);
-void after_after_frameset_mode(token *tk);
+void initial_mode(const token *tk);
+void before_html_mode(const token *tk);
+void before_head_mode(const token *tk);
+void in_head_mode(const token *tk);
+void in_head_noscript_mode(const token *tk);
+void after_head_mode(const token *tk);
+void in_body_mode(const token *tk);
+void text_mode(const token *tk);
+void in_table_mode(const token *tk);
+void in_table_text_mode(const token *tk);
+void in_caption_mode(const token *tk);
+void in_column_group_mode(const token *tk);
+void in_table_body_mode(const token *tk);
+void in_row_mode(const token *tk);
+void in_cell_mode(const token *tk);
+void in_select_mode(const token *tk);
+void in_select_in_table_mode(const token *tk);
+void after_body_mode(const token *tk);
+void in_frameset_mode(const token *tk);
+void after_frameset_mode(const token *tk);
+void after_after_body_mode(const token *tk);
+void after_after_frameset_mode(const token *tk);
 
 /*------------------------------------------------------------------------*/
 
@@ -235,7 +235,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 insertion_mode reset_insertion_mode(element_stack *st);
 insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name);
 
-void parse_token_in_foreign_content(token *tk);
+void parse_token_in_foreign_content(const token *tk);
 
 void plaintext_process(void);
 
@@ -4773,7 +4773,7 @@ token_list *cdata_section_state_s68(unsigned char *ch)
 /*----------------------------------------------------------------------------*/
 
 /*------------------------------------------------------------------------------------*/
-void initial_mode(token *tk)
+void initial_mode(const token *tk)
 {
 	switch (tk->type) 
 	{
@@ -4846,7 +4846,7 @@ void initial_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void before_html_mode(token *tk)
+void before_html_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -4956,7 +4956,7 @@ void before_html_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void before_head_mode(token *tk)
+void before_head_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -5077,7 +5077,7 @@ void before_head_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_head_mode(token *tk)
+void in_head_mode(const token *tk)
 { 
 
 	switch (tk->type) 
@@ -5269,7 +5269,7 @@ void in_head_mode(token *tk)
 
 }
 /*------------------------------------------------------------------------------------*/
-void in_head_noscript_mode(token *tk)
+void in_head_noscript_mode(const token *tk)
 {
 	switch (tk->type) 
 	{
@@ -5380,7 +5380,7 @@ void in_head_noscript_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_head_mode(token *tk)
+void after_head_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -5564,7 +5564,7 @@ void after_head_mode(token *tk)
 
 /*------------------------------------------------------------------------------------*/
 /*=======================BEGINNING OF IN BODY MODE==================================*/
-void in_body_mode(token *tk)
+void in_body_mode(const token *tk)
 {
 
 	switch (tk->type) 
@@ -6367,10 +6367,27 @@ void in_body_mode(token *tk)
 				else if(strcmp(tk->stt.tag_name, "image") == 0)
 				{
 					//parse error
-					free(tk->stt.tag_name);
-					tk->stt.tag_name = strdup("img");
+					
+					//free(tk->stt.tag_name);
+					//tk->stt.tag_name = strdup("img");
+					//token_process = REPROCESS;
 
-					token_process = REPROCESS;
+					element_node *e;
+					//Reconstruct the active formatting elements , if any.
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
+
+					e = create_element_node("img", tk->stt.attributes, HTML);
+					if(apply_foster_parenting == 1)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
+					
+					//Acknowledge the token's self-closing flag, if it is set.
+					//Set the frameset-ok flag to "not ok".
 				}
 				else if(strcmp(tk->stt.tag_name, "isindex") == 0)
 				{
@@ -7108,7 +7125,7 @@ void in_body_mode(token *tk)
 
 /*=======================END OF IN BODY MODE==================================*/
 /*------------------------------------------------------------------------------------*/
-void text_mode(token *tk)
+void text_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -7198,7 +7215,7 @@ void text_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_table_mode(token *tk)
+void in_table_mode(const token *tk)
 { 
 
 	switch (tk->type) 
@@ -7456,7 +7473,7 @@ void in_table_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_table_text_mode(token *tk)
+void in_table_text_mode(const token *tk)
 {
 	long i, len;
 	text_node *t = NULL;
@@ -7552,7 +7569,7 @@ void in_table_text_mode(token *tk)
 
 
 /*------------------------------------------------------------------------------------*/
-void in_caption_mode(token *tk)
+void in_caption_mode(const token *tk)
 { 
 
 	if((tk->type == TOKEN_START_TAG) &&
@@ -7749,7 +7766,7 @@ void in_caption_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_column_group_mode(token *tk)
+void in_column_group_mode(const token *tk)
 {
 
 	switch (tk->type) 
@@ -7909,7 +7926,7 @@ void in_column_group_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_table_body_mode(token *tk)
+void in_table_body_mode(const token *tk)
 { 
 	if((tk->type == TOKEN_START_TAG) &&
 	   (strcmp(tk->stt.tag_name, "tr") == 0))
@@ -8041,7 +8058,7 @@ void in_table_body_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_row_mode(token *tk)
+void in_row_mode(const token *tk)
 {
 	if((tk->type == TOKEN_START_TAG) &&
 		((strcmp(tk->stt.tag_name, "th") == 0) ||
@@ -8178,7 +8195,7 @@ void in_row_mode(token *tk)
  }
 
 /*------------------------------------------------------------------------------------*/
-void in_cell_mode(token *tk)
+void in_cell_mode(const token *tk)
 { 
 	if((tk->type == TOKEN_START_TAG) &&
 		((strcmp(tk->stt.tag_name, "caption") == 0) ||
@@ -8419,7 +8436,7 @@ void in_cell_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_select_mode(token *tk)
+void in_select_mode(const token *tk)
 {
 	switch (tk->type) 
 	{
@@ -8726,7 +8743,7 @@ void in_select_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_select_in_table_mode(token *tk)
+void in_select_in_table_mode(const token *tk)
 { 
 	if((tk->type == TOKEN_START_TAG) &&
 	   ((strcmp(tk->stt.tag_name, "caption") == 0) ||
@@ -8803,7 +8820,7 @@ void in_select_in_table_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_body_mode(token *tk)
+void after_body_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -8983,7 +9000,7 @@ void after_body_mode(token *tk)
 
 
 /*------------------------------------------------------------------------------------*/
-void in_frameset_mode(token *tk)
+void in_frameset_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -9073,7 +9090,7 @@ void in_frameset_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_frameset_mode(token *tk)
+void after_frameset_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -9132,7 +9149,7 @@ void after_frameset_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_after_body_mode(token *tk)
+void after_after_body_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -9290,7 +9307,7 @@ void after_after_body_mode(token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_after_frameset_mode(token *tk)
+void after_after_frameset_mode(const token *tk)
 { 
 	switch (tk->type) 
 	{
@@ -9467,7 +9484,7 @@ insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name
 
 
 /*------------------------------------------------------------------------------------*/
-void parse_token_in_foreign_content(token *tk)
+void parse_token_in_foreign_content(const token *tk)
 {
 	switch (tk->type) 
 	{
@@ -9625,6 +9642,7 @@ void parse_token_in_foreign_content(token *tk)
 				else
 				{
 					element_node *e;
+					unsigned char *token_start_tag_name = tk->stt.tag_name;
 
 					if(current_node->name_space == MATHML)
 					{
@@ -9632,7 +9650,10 @@ void parse_token_in_foreign_content(token *tk)
 					}
 					else if(current_node->name_space == SVG)
 					{
-						tk->stt.tag_name = adjust_svg_start_tag_name(tk->stt.tag_name);
+						//tk->stt.tag_name = adjust_svg_start_tag_name(tk->stt.tag_name);
+						
+						//function will either return an adjusted name, or tk->stt.tag_name itself.
+						token_start_tag_name = adjust_svg_start_tag_name(tk->stt.tag_name);
 
 						adjust_svg_attributes(tk->stt.attributes);
 					}
@@ -9641,7 +9662,7 @@ void parse_token_in_foreign_content(token *tk)
 					adjust_foreign_attributes(tk->stt.attributes);
 
 					//Insert a foreign element for the token, in the same namespace as the current node
-					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, current_node->name_space);
+					e = create_element_node(token_start_tag_name, tk->stt.attributes, current_node->name_space);
 					add_child_node(current_node, (node *)e);
 					
 					open_element_stack_push(&o_e_stack, e);
@@ -9654,6 +9675,12 @@ void parse_token_in_foreign_content(token *tk)
 					{
 						open_element_stack_pop(&o_e_stack);
 						current_node = open_element_stack_top(o_e_stack);
+					}
+
+					//free the adjusted name returned, only if it is different from original name.
+					if(token_start_tag_name != tk->stt.tag_name)
+					{
+						free(token_start_tag_name);		
 					}
 				}
 			}
