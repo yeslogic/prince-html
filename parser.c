@@ -237,7 +237,7 @@ insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name
 
 void parse_token_in_foreign_content(const token *tk);
 
-void plaintext_process(void);
+void process_trailing_text(void);
 
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
@@ -396,7 +396,7 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	}
 
 	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
-	//html_parse_memory_fragment(file_buffer, buffer_length, "div", root_ptr);
+	//html_parse_memory_fragment(file_buffer, buffer_length, "span", root_ptr);
 
 	return 1;
 }
@@ -584,7 +584,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 		curr_buffer_index = curr_index;
 	}
 
-	plaintext_process();
+	process_trailing_text();
 }
 
 
@@ -9493,6 +9493,8 @@ void parse_token_in_foreign_content(const token *tk)
 				if(tk->cht.ch == NULL_CHARACTER)
 				{
 					//Parse error. Insert a U+FFFD REPLACEMENT CHARACTER character into the current node.
+
+					/*
 					unsigned char byte_seq[5];
 					int len, i;
 
@@ -9519,6 +9521,17 @@ void parse_token_in_foreign_content(const token *tk)
 
 						add_child_node(current_node, (node *)t);
 					}
+					*/
+
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+
 				}
 				else if((tk->cht.ch == CHARACTER_TABULATION) ||
 						(tk->cht.ch == LINE_FEED) ||
@@ -9529,15 +9542,14 @@ void parse_token_in_foreign_content(const token *tk)
 					//insert the character into the current node
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node->last_child;
-						t->text_data = string_append(t->text_data, tk->cht.ch);
+						;
 					}
 					else
 					{
-						text_node *t = create_text_node();
-						t->text_data = string_append(t->text_data, tk->cht.ch);
+						text_node *t = create_text_node();		//create text node with empty string as data.
 						add_child_node(current_node, (node *)t);
 					}
+
 				}
 				else
 				{
@@ -9545,32 +9557,94 @@ void parse_token_in_foreign_content(const token *tk)
 					//Set the frameset-ok flag to "not ok".
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node->last_child;
-						t->text_data = string_append(t->text_data, tk->cht.ch);
+						;
 					}
 					else
 					{
-						text_node *t = create_text_node();
-						t->text_data = string_append(t->text_data, tk->cht.ch);
+						text_node *t = create_text_node();		//create text node with empty string as data.
 						add_child_node(current_node, (node *)t);
 					}
+
 				}
 			}
 			break;
 		case TOKEN_COMMENT:
 			{
 				//Append a Comment node to the Document object with the data attribute set to the data given in the comment token.
-				comment_node *c = create_comment_node(tk->cmt.comment);
+				comment_node *c;
+
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+					
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+					
+				c = create_comment_node(tk->cmt.comment);
 				add_child_node(current_node, (node *)c);
 			}
 			break;
 		case TOKEN_DOCTYPE:
 			{
-				;	//parse error, ignore the token
+				//parse error, ignore the token
+
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+					
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
 			}
 			break;
 		case TOKEN_START_TAG:
 		    {
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+					
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+
+
 				if((strcmp(tk->stt.tag_name, "b") == 0) ||
 				   (strcmp(tk->stt.tag_name, "big") == 0) ||
 				   (strcmp(tk->stt.tag_name, "blockquote") == 0) ||
@@ -9687,6 +9761,28 @@ void parse_token_in_foreign_content(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
+
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+					
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+
+
 				if(strcmp(tk->ett.tag_name, "script") == 0)
 				{
 					if((current_node->name_space == SVG) &&
@@ -9767,30 +9863,26 @@ void parse_token_in_foreign_content(const token *tk)
 
 
 /*------------------------------------------------------------------------------------*/
-void plaintext_process(void)
+void process_trailing_text(void)
 {
-	if((last_start_tag_name != NULL) && 
-	   (strcmp(last_start_tag_name, "plaintext") == 0))
+	if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 	{
-		if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+		text_node *t = (text_node *)current_node->last_child;
+
+		//copy text_chunk from file buffer to text_buffer:
+		if((text_chunk != NULL) && (text_char_count > 0))
 		{
-			text_node *t = (text_node *)current_node->last_child;
-
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
-					
-			if(text_buffer != NULL)
-			{
-				t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-				free(text_buffer);
-				text_buffer = NULL;
-			}
+			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
 		}
-
+		text_chunk = NULL;
+		text_char_count = 0;
+					
+		if(text_buffer != NULL)
+		{
+			t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+			free(text_buffer);
+			text_buffer = NULL;
+		}
 	}
+
 }
