@@ -316,7 +316,7 @@ token_list *(*const tokeniser_state_functions [NUM_TOKENIZATION_STATES]) (unsign
 
 /*-------------------TREE CONSTRUCTION STATE MACHINE----------------------*/
 /*------------------------------------------------------------------------*/
-void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (token *tk) = {
+void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (const token *tk) = {
 	initial_mode,
 	before_html_mode,
 	before_head_mode,
@@ -370,7 +370,9 @@ unsigned char *current_char;
 unsigned char *text_chunk = NULL;
 unsigned char *text_buffer = NULL;
 
+unsigned char *attr_value_chunk = NULL;
 
+long attr_value_char_count = 0;
 long text_char_count = 0;
 
 long curr_buffer_index;
@@ -3078,22 +3080,26 @@ token_list *before_attribute_value_state_s37(unsigned char *ch)
 	{
 		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
-		{
-			curr_attr_value = string_append(curr_attr_value, byte_seq[i]);
-		}
-
+		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
+		
 		current_state = ATTRIBUTE_VALUE_UNQUOTED_STATE;
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
 		current_state = DATA_STATE;
+
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+		{
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
 
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
@@ -3124,7 +3130,14 @@ token_list *before_attribute_value_state_s37(unsigned char *ch)
 	else if((c == LESS_THAN_SIGN) || (c == EQUALS_SIGN) || (c == GRAVE_ACCENT))
 	{
 		//parse error
-		curr_attr_value = string_append(curr_attr_value, c);
+		//curr_attr_value = string_append(curr_attr_value, c);
+
+		//instead of appending current char to the curr_attr_value,
+		//mark the beginnig of the attribute value in the file buffer,
+		//and start counting the number of characters.
+		attr_value_chunk = current_char;
+		attr_value_char_count = 1;
+	
 		current_state = ATTRIBUTE_VALUE_UNQUOTED_STATE;
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -3135,7 +3148,14 @@ token_list *before_attribute_value_state_s37(unsigned char *ch)
 	}
 	else
 	{
-		curr_attr_value = string_append(curr_attr_value, c);
+		//curr_attr_value = string_append(curr_attr_value, c);
+		
+		//instead of appending current char to the curr_attr_value,
+		//mark the beginnig of the attribute value in the file buffer,
+		//and start counting the number of characters.
+		attr_value_chunk = current_char;
+		attr_value_char_count = 1;
+
 		current_state = ATTRIBUTE_VALUE_UNQUOTED_STATE;
 	}
 
@@ -3162,15 +3182,21 @@ token_list *attribute_value_double_quoted_state_s38(unsigned char *ch)
 	{
 		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
 		{
-			curr_attr_value = string_append(curr_attr_value, byte_seq[i]);
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
 		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+		
+
+		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
+		utf8_byte_sequence(0xFFFD, byte_seq);
+		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
+
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
 	{
@@ -3180,7 +3206,20 @@ token_list *attribute_value_double_quoted_state_s38(unsigned char *ch)
 	}
 	else
 	{
-		curr_attr_value = string_append(curr_attr_value, c);
+		//curr_attr_value = string_append(curr_attr_value, c);
+
+		//instead of appending current char to the curr_attr_value,
+		//mark the beginnig of the attribute value in the file buffer, AND/OR
+		//start counting the number of characters.
+		if(attr_value_char_count == 0)
+		{
+			attr_value_chunk = current_char;
+			attr_value_char_count = 1;
+		}
+		else
+		{
+			attr_value_char_count += 1;
+		}
 	}
 
 	return NULL;
@@ -3206,15 +3245,21 @@ token_list *attribute_value_single_quoted_state_s39(unsigned char *ch)
 	{
 		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
 		{
-			curr_attr_value = string_append(curr_attr_value, byte_seq[i]);
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
 		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+		
+
+		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
+		utf8_byte_sequence(0xFFFD, byte_seq);
+		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
+
+
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
 	{
@@ -3224,7 +3269,20 @@ token_list *attribute_value_single_quoted_state_s39(unsigned char *ch)
 	}
 	else
 	{
-		curr_attr_value = string_append(curr_attr_value, c);
+		//curr_attr_value = string_append(curr_attr_value, c);
+
+		//instead of appending current char to the curr_attr_value,
+		//mark the beginnig of the attribute value in the file buffer, AND/OR
+		//start counting the number of characters.
+		if(attr_value_char_count == 0)
+		{
+			attr_value_chunk = current_char;
+			attr_value_char_count = 1;
+		}
+		else
+		{
+			attr_value_char_count += 1;
+		}
 	}
 
 	return NULL;
@@ -3239,6 +3297,14 @@ token_list *attribute_value_unquoted_state_s40(unsigned char *ch)
 	//character tabulation, line feed, form feed, space
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+		{
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
 		if((curr_attr_name != NULL) && (attribute_name_in_list(curr_attr_name, curr_token->stt.attributes) == 0))
@@ -3265,6 +3331,14 @@ token_list *attribute_value_unquoted_state_s40(unsigned char *ch)
 	{
 		current_state = DATA_STATE;
 		
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+		{
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
 		if((curr_attr_name != NULL) && (attribute_name_in_list(curr_attr_name, curr_token->stt.attributes) == 0))
@@ -3295,21 +3369,39 @@ token_list *attribute_value_unquoted_state_s40(unsigned char *ch)
 	{
 		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
 		{
-			curr_attr_value = string_append(curr_attr_value, byte_seq[i]);
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
 		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
+		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
+		utf8_byte_sequence(0xFFFD, byte_seq);
+		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
+
+
 	}
 	else if((c == QUOTATION_MARK) || (c == APOSTROPHE) || (c == LESS_THAN_SIGN) 
 				|| (c == EQUALS_SIGN) || (c == GRAVE_ACCENT))
 	{	
 		//parse error
-		curr_attr_value = string_append(curr_attr_value, c);
+		//curr_attr_value = string_append(curr_attr_value, c);
+
+		//instead of appending current char to the curr_attr_value,
+		//mark the beginnig of the attribute value in the file buffer, AND/OR
+		//start counting the number of characters.
+		if(attr_value_char_count == 0)
+		{
+			attr_value_chunk = current_char;
+			attr_value_char_count = 1;
+		}
+		else
+		{
+			attr_value_char_count += 1;
+		}
 
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -3320,7 +3412,20 @@ token_list *attribute_value_unquoted_state_s40(unsigned char *ch)
 	}
 	else
 	{
-		curr_attr_value = string_append(curr_attr_value, c);
+		//curr_attr_value = string_append(curr_attr_value, c);
+
+		//instead of appending current char to the curr_attr_value,
+		//mark the beginnig of the attribute value in the file buffer, AND/OR
+		//start counting the number of characters.
+		if(attr_value_char_count == 0)
+		{
+			attr_value_chunk = current_char;
+			attr_value_char_count = 1;
+		}
+		else
+		{
+			attr_value_char_count += 1;
+		}
 	}
 
 	return NULL;
@@ -3360,16 +3465,34 @@ token_list *ch_reference_in_attribute_value_state_s41(unsigned char *ch)
 	{
 		character_consumption = RECONSUME;
 
-		curr_attr_value = string_append(curr_attr_value, AMPERSAND);
+		//curr_attr_value = string_append(curr_attr_value, AMPERSAND);
+
+		//not a character reference, so treat it as normal text.
+		if(attr_value_char_count == 0)	//no text before '&'
+		{
+			attr_value_chunk = (current_char - 1);	//mark the beginning of attribute value at '&'.
+			attr_value_char_count = 1;				//the current char ch will be reconsumed, so do not count it yet.
+		}
+		else
+		{
+			attr_value_char_count += 1;		//there must be text before '&', just increment it to include '&'.
+		}
 	}
 	else
 	{	
-		int i, len = strlen(char_ref);
 		
-		for(i = 0; i < len; i++)
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
 		{
-			curr_attr_value = string_append(curr_attr_value, char_ref[i]);
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
 		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
+
+		//append char_ref to curr_attr_value:
+		curr_attr_value = string_n_append(curr_attr_value, char_ref, strlen(char_ref));
+
 
 		free(char_ref);
 		character_skip = chars_consumed - 1;
@@ -3387,6 +3510,15 @@ token_list *after_attribute_value_quoted_state_s42(unsigned char *ch)
 	//character tabulation, line feed, form feed, space
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+		{
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
+
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
 		if((curr_attr_name != NULL) && (attribute_name_in_list(curr_attr_name, curr_token->stt.attributes) == 0))
@@ -3410,6 +3542,15 @@ token_list *after_attribute_value_quoted_state_s42(unsigned char *ch)
 	else if(c == GREATER_THAN_SIGN)
 	{
 		current_state = DATA_STATE;
+
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+		{
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
 
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
@@ -3445,6 +3586,31 @@ token_list *after_attribute_value_quoted_state_s42(unsigned char *ch)
 	else
 	{
 		//parse error
+
+		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+		{
+			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+		}
+		attr_value_chunk = NULL;
+		attr_value_char_count = 0;
+
+
+		//if the attribute name is not already in the attribute list, 
+		//then add the attribute(name, value pair) to the attribute list.
+		if((curr_attr_name != NULL) && (attribute_name_in_list(curr_attr_name, curr_token->stt.attributes) == 0))
+		{
+			curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
+																  curr_attr_value, 
+																  DEFAULT,
+																  curr_token->stt.attributes);
+		}
+		free(curr_attr_name);
+		free(curr_attr_value);
+		curr_attr_name = NULL;
+		curr_attr_value = NULL;
+
+
 		current_state = BEFORE_ATTRIBUTE_NAME_STATE;
 		character_consumption = RECONSUME;
 	}
@@ -3465,6 +3631,14 @@ token_list *self_closing_start_tag_state_s43(unsigned char *ch)
 		if(curr_token->type == TOKEN_START_TAG)
 		{
 			curr_token->stt.self_closing_flag = SET;
+
+			//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+			if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+			{
+				curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+			}
+			attr_value_chunk = NULL;
+			attr_value_char_count = 0;
 		
 			//if the attribute name is not already in the attribute list, 
 			//then add the attribute(name, value pair) to the attribute list.
@@ -3494,6 +3668,34 @@ token_list *self_closing_start_tag_state_s43(unsigned char *ch)
 	else
 	{
 		//parse error
+		if(curr_token->type == TOKEN_START_TAG)
+		{
+
+			//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+			if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+			{
+				curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+			}
+			attr_value_chunk = NULL;
+			attr_value_char_count = 0;
+		
+			//if the attribute name is not already in the attribute list, 
+			//then add the attribute(name, value pair) to the attribute list.
+			if((curr_attr_name != NULL) && 
+					(attribute_name_in_list(curr_attr_name, curr_token->stt.attributes) == 0))
+			{
+				curr_token->stt.attributes = html_attribute_list_cons(curr_attr_name, 
+																	  curr_attr_value, 
+																	  DEFAULT,
+																	  curr_token->stt.attributes);
+			}
+		}
+		free(curr_attr_name);
+		free(curr_attr_value);
+		curr_attr_name = NULL;
+		curr_attr_value = NULL;
+
+
 		current_state = BEFORE_ATTRIBUTE_NAME_STATE;
 		character_consumption = RECONSUME;
 	}
