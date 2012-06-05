@@ -1,3 +1,5 @@
+// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Released as Open Source (see COPYING.txt for details)
 
 
 #define AMPERSAND 0x26

@@ -1,3 +1,7 @@
+// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Released as Open Source (see COPYING.txt for details)
+
+
 #include <stdlib.h>
 #include <string.h>
 #include "char_ref.h"

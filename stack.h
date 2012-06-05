@@ -1,3 +1,7 @@
+// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Released as Open Source (see COPYING.txt for details)
+
+
 #include "tree.h"
 
 typedef struct element_stack_s element_stack;
