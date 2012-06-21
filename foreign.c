@@ -191,7 +191,7 @@ unsigned char *adjust_svg_start_tag_name(unsigned char *svg_start_tag_name)
 /*----------------------------------------------------------------------*/
 /*return 1 if current_node dictates that the next token should be parsed in HTML content*/
 /*return 0 if it should be parsed in foreign content*/
-int parsing_token_in_html_content(element_node *current_node, token *tk)
+int parsing_token_in_html_content(element_node *current_node, const token *tk)
 {
 	if((current_node == NULL) 
 	   ||

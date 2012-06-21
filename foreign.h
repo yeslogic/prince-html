@@ -11,7 +11,7 @@ void adjust_mathml_attributes(attribute_list *mathml_attrs);
 
 unsigned char *adjust_svg_start_tag_name(unsigned char *svg_start_tag_name);
 
-int parsing_token_in_html_content(element_node *current_node, token *tk);
+int parsing_token_in_html_content(element_node *current_node, const token *tk);
 
 int is_mathml_text_integration_point(element_node *current_node);
 
