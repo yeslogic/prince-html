@@ -243,7 +243,11 @@ void parse_token_in_foreign_content(const token *tk);
 
 void process_trailing_text(void);
 
+void process_trailing_comment(void);
+
 void process_token(token *tk);
+
+void process_eof(void);
 
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
@@ -473,7 +477,7 @@ void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **ro
 	//create a document root element
 	doc_root = create_element_node("DOC", NULL, HTML);
 
-	html_parse_memory_1(file_buffer, buffer_length, NULL, DATA_STATE, INITIAL);
+	html_parse_memory_1(file_buffer, buffer_length, doc_root, DATA_STATE, INITIAL);
 	
 	*root_ptr = (node *)doc_root;
 	*doctype_ptr = doc_type;
@@ -538,7 +542,9 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 		curr_buffer_index = curr_index;
 	}
 
+	process_eof();
 	process_trailing_text();
+	process_trailing_comment();
 }
 
 
@@ -3808,6 +3814,7 @@ void bogus_comment_state_s44(unsigned char *ch)
 
 	
 	process_token(curr_token);
+	curr_token = NULL;
 	return;
 }
 
@@ -3886,6 +3893,7 @@ void comment_start_state_s46(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -3939,6 +3947,7 @@ void comment_start_dash_state_s47(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4056,6 +4065,7 @@ void comment_end_state_s50(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 	}
 	else if( c == NULL_CHARACTER)
@@ -4127,6 +4137,7 @@ void comment_end_bang_state_s51(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 	}
 	else if( c == NULL_CHARACTER)
@@ -5403,7 +5414,6 @@ void in_head_mode(const token *tk)
 					//Act as if an end tag token with the tag name "head" had been seen, 
 					//and reprocess the current token.
 
-					//current_node = current_node->parent; 
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5513,7 +5523,6 @@ void in_head_mode(const token *tk)
 					//Act as if an end tag token with the tag name "head" had been seen, 
 					//and reprocess the current token
 
-					//current_node = current_node->parent; 
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5531,7 +5540,6 @@ void in_head_mode(const token *tk)
 					//Act as if an end tag token with the tag name "head" had been seen, 
 					//and reprocess the current token.
 					
-					//current_node = current_node->parent; 
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5540,7 +5548,6 @@ void in_head_mode(const token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "head") == 0)
 				{
-					//current_node = current_node->parent; 
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 					current_mode = AFTER_HEAD;
@@ -5558,7 +5565,6 @@ void in_head_mode(const token *tk)
 			//Act as if an end tag token with the tag name "head" had been seen, 
 			//and reprocess the current token.
 			{
-				//current_node = current_node->parent; 
 				open_element_stack_pop(&o_e_stack); 
 				current_node = open_element_stack_top(o_e_stack);
 
@@ -5852,7 +5858,7 @@ void after_head_mode(const token *tk)
 			{
 				element_node *e = create_element_node("body", NULL, HTML);
 				add_child_node(current_node, (node *)e);
-				//current_node = (node *)e; 
+
 				open_element_stack_push(&o_e_stack, e); 
 				current_node = open_element_stack_top(o_e_stack);
 
@@ -7416,7 +7422,7 @@ void in_body_mode(const token *tk)
 
 			break;
 		case TOKEN_EOF:
-			//implementation pending
+			//stop parsing.
 			break;
 		default:
 			break;
@@ -9294,7 +9300,6 @@ void after_body_mode(const token *tk)
 
 			break;
 		case TOKEN_EOF:
-			//implementation pending
 			//stop parsing;
 			break;
 		default:
@@ -10175,7 +10180,7 @@ void parse_token_in_foreign_content(const token *tk)
 /*------------------------------------------------------------------------------------*/
 void process_trailing_text(void)
 {
-	if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+	if((current_node != NULL) && (current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 	{
 		text_node *t = (text_node *)current_node->last_child;
 
@@ -10201,22 +10206,64 @@ void process_trailing_text(void)
 /*------------------------------------------------------------------------------------*/
 void process_token(token *tk)
 {
-	do
+	if(tk != NULL)
 	{
-		token_process = NOT_REPROCESS;
-
-		//parse token in html content or foreign content?
-		if(parsing_token_in_html_content(current_node, tk) == 1)
+		do
 		{
-			tree_cons_state_functions[current_mode](tk);
+			token_process = NOT_REPROCESS;
+
+			//parse token in html content or foreign content?
+			if(parsing_token_in_html_content(current_node, tk) == 1)
+			{
+				tree_cons_state_functions[current_mode](tk);
+			}
+			else
+			{
+				parse_token_in_foreign_content(tk);
+			}
+
+		}while(token_process == REPROCESS);
+
+		free_token(tk);
+	}
+}
+
+
+/*------------------------------------------------------------------------------------*/
+void process_eof(void)
+{
+	process_token(create_eof_token());
+}
+
+
+/*------------------------------------------------------------------------------------*/
+void process_trailing_comment(void)
+{
+	if((curr_token != NULL) && (curr_token->type == TOKEN_COMMENT))
+	{
+		comment_node *c = create_comment_node(curr_token->cmt.comment);
+
+		if((current_mode == INITIAL) ||
+		   (current_mode == BEFORE_HTML) ||
+		   (current_mode == AFTER_AFTER_BODY))
+		{
+			add_child_node(doc_root, (node *)c);
+		}
+		else if(current_mode == AFTER_BODY)
+		{
+			node *html_node = doc_root->first_child;
+
+			if((html_node != NULL) && (html_node->type == ELEMENT_N))
+			{
+				add_child_node((element_node *)html_node, (node *)c);
+			}
 		}
 		else
 		{
-			parse_token_in_foreign_content(tk);
+			if(current_node != NULL)
+			{
+				add_child_node(current_node, (node *)c);
+			}
 		}
-
-	}while(token_process == REPROCESS);
-
-	free_token(tk);
-
+	}
 }
