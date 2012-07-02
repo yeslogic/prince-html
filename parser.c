@@ -240,14 +240,12 @@ insertion_mode reset_insertion_mode(element_stack *st);
 insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name);
 
 void parse_token_in_foreign_content(const token *tk);
-
 void process_trailing_text(void);
-
 void process_trailing_comment(void);
-
 void process_token(token *tk);
-
 void process_eof(void);
+void append_null_replacement(void);
+void append_null_replacement_for_attribute_value(void);
 
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
@@ -674,25 +672,7 @@ void rcdata_state_s3(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		unsigned char byte_seq[5];
-
-		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
-		{
-				//copy the text from file buffer to text_buffer:
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-
-		text_chunk = NULL;
-		text_char_count = 0;
-
-		//append replacement char(0xFFFD) to text_buffer
-		utf8_byte_sequence(0xFFFD, byte_seq);
-
-		text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
-
-		//this is only useful and necessary if the NULL char is the first char of the text node.
-		//if the NULL char is NOT the first char of the text node, the returned tokens will be ignored.	
-		process_token(create_character_token(byte_seq[0]));
+		append_null_replacement();
 		return;
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -790,25 +770,7 @@ void rawtext_state_s5(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		unsigned char byte_seq[5];
-
-		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
-		{
-				//copy the text from file buffer to text_buffer:
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-
-		text_chunk = NULL;
-		text_char_count = 0;
-
-		//append replacement char(0xFFFD) to text_buffer
-		utf8_byte_sequence(0xFFFD, byte_seq);
-
-		text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
-
-		//this is only useful and necessary if the NULL char is the first char of the text node.
-		//if the NULL char is NOT the first char of the text node, the returned tokens will be ignored.
-		process_token(create_character_token(byte_seq[0]));
+		append_null_replacement();
 		return;
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -884,25 +846,7 @@ void plaintext_state_s7(unsigned char *ch)
 	if(c == NULL_CHARACTER)
 	{
 		//parse error
-		unsigned char byte_seq[5];
-
-		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
-		{
-				//copy the text from file buffer to text_buffer:
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-
-		text_chunk = NULL;
-		text_char_count = 0;
-
-		//append replacement char(0xFFFD) to text_buffer
-		utf8_byte_sequence(0xFFFD, byte_seq);
-
-		text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
-
-		//this is only useful and necessary if the NULL char is the first char of the text node.
-		//if the NULL char is NOT the first char of the text node, the returned tokens will be ignored.
-		process_token(create_character_token(byte_seq[0]));
+		append_null_replacement();
 		return;
 
 	}
@@ -3230,21 +3174,7 @@ void attribute_value_double_quoted_state_s38(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		unsigned char byte_seq[5];
-
-
-		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
-		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
-		{
-			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
-		}
-		attr_value_chunk = NULL;
-		attr_value_char_count = 0;
-		
-
-		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
+		append_null_replacement_for_attribute_value();
 
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -3293,21 +3223,7 @@ void attribute_value_single_quoted_state_s39(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		unsigned char byte_seq[5];
-
-		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
-		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
-		{
-			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
-		}
-		attr_value_chunk = NULL;
-		attr_value_char_count = 0;
-		
-
-		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
-
+		append_null_replacement_for_attribute_value();
 
 	}
 	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
@@ -3419,20 +3335,7 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		unsigned char byte_seq[5];
-
-		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
-		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
-		{
-			curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
-		}
-		attr_value_chunk = NULL;
-		attr_value_char_count = 0;
-
-		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
-
+		append_null_replacement_for_attribute_value();
 
 	}
 	else if((c == QUOTATION_MARK) || (c == APOSTROPHE) || (c == LESS_THAN_SIGN) 
@@ -10266,4 +10169,53 @@ void process_trailing_comment(void)
 			}
 		}
 	}
+}
+
+
+/*------------------------------------------------------------------------------------*/
+void append_null_replacement(void)
+{
+	unsigned char byte_seq[5];
+
+	if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
+	{
+		//copy the text from file buffer to text_buffer:
+		text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+	}
+
+	text_chunk = NULL;
+	text_char_count = 0;
+
+	//append replacement char(0xFFFD) to text_buffer
+	utf8_byte_sequence(0xFFFD, byte_seq);
+
+	text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
+
+	//this is only useful and necessary if the NULL char is the first char of the text node.
+	//if the NULL char is NOT the first char of the text node, the returned tokens will be ignored.
+	process_token(create_character_token(byte_seq[0]));
+
+}
+
+
+
+/*------------------------------------------------------------------------------------*/
+void append_null_replacement_for_attribute_value(void)
+{
+	unsigned char byte_seq[5];
+
+
+	//copy attr_value_chunk from file buffer and append it to curr_attr_value:
+	if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+	{
+		curr_attr_value = string_n_append(curr_attr_value, attr_value_chunk, attr_value_char_count);
+	}
+	attr_value_chunk = NULL;
+	attr_value_char_count = 0;
+		
+
+	//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
+	utf8_byte_sequence(0xFFFD, byte_seq);
+	curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
+
 }
