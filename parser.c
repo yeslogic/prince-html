@@ -575,12 +575,6 @@ void data_state_s1(unsigned char *ch)
 
 		//The NULL character is not emitted here, as it would be ignored in in_body_mode(). 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//curr_token = create_eof_token();
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
@@ -675,12 +669,6 @@ void rcdata_state_s3(unsigned char *ch)
 		append_null_replacement();
 		return;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//curr_token = create_eof_token();
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
@@ -773,12 +761,6 @@ void rawtext_state_s5(unsigned char *ch)
 		append_null_replacement();
 		return;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//curr_token = create_eof_token();
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
@@ -823,12 +805,6 @@ void script_data_state_s6(unsigned char *ch)
 		}
 		return;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//curr_token = create_eof_token();
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		process_token(create_character_token(c));
@@ -849,12 +825,6 @@ void plaintext_state_s7(unsigned char *ch)
 		append_null_replacement();
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//curr_token = create_eof_token();
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -967,19 +937,6 @@ void end_tag_open_state_s9(unsigned char *ch)
 
 		current_state = DATA_STATE;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-
-		//tk_list = html_token_list_cons(create_character_token(LESS_THAN_SIGN), NULL);
-		//tk_list = html_token_list_cons(create_character_token(SOLIDUS), tk_list);
-
-		//character_consumption = RECONSUME;
-		//current_state = DATA_STATE;
-
-		//return tk_list;
-		;
-	}
 	else
 	{
 		//parse error
@@ -1068,13 +1025,6 @@ void tag_name_state_s10(unsigned char *ch)
 				;
 			}
 		}
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//character_consumption = RECONSUME;
-		//current_state = DATA_STATE;
-		;
 	}
 	else
 	{
@@ -1763,14 +1713,9 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			process_token(create_character_token(LESS_THAN_SIGN));
 			process_token(create_character_token(SOLIDUS));
 
-			/*
-			tk_list = html_token_list_cons(create_character_token(LESS_THAN_SIGN), NULL);
-			tk_list = html_token_list_cons(create_character_token(SOLIDUS), tk_list);
-			*/
 		
 			for(i = 0; i < len; i++)
 			{
-				//tk_list = html_token_list_cons(create_character_token(temp_buf[i]), tk_list);
 				process_token(create_character_token(temp_buf[i]));
 			}
 
@@ -1810,14 +1755,9 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			process_token(create_character_token(LESS_THAN_SIGN));
 			process_token(create_character_token(SOLIDUS));
 
-			/*
-			tk_list = html_token_list_cons(create_character_token(LESS_THAN_SIGN), NULL);
-			tk_list = html_token_list_cons(create_character_token(SOLIDUS), tk_list);
-			*/
 		
 			for(i = 0; i < len; i++)
 			{
-				//tk_list = html_token_list_cons(create_character_token(temp_buf[i]), tk_list);
 				process_token(create_character_token(temp_buf[i]));
 			}
 
@@ -1857,14 +1797,9 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			process_token(create_character_token(LESS_THAN_SIGN));
 			process_token(create_character_token(SOLIDUS));
 
-			/*
-			tk_list = html_token_list_cons(create_character_token(LESS_THAN_SIGN), NULL);
-			tk_list = html_token_list_cons(create_character_token(SOLIDUS), tk_list);
-			*/
 		
 			for(i = 0; i < len; i++)
 			{
-				//tk_list = html_token_list_cons(create_character_token(temp_buf[i]), tk_list);
 				process_token(create_character_token(temp_buf[i]));
 			}
 
@@ -1904,14 +1839,9 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 		process_token(create_character_token(LESS_THAN_SIGN));
 		process_token(create_character_token(SOLIDUS));
 
-		/*
-		tk_list = html_token_list_cons(create_character_token(LESS_THAN_SIGN), NULL);
-		tk_list = html_token_list_cons(create_character_token(SOLIDUS), tk_list);
-		*/
 		
 		for(i = 0; i < len; i++)
 		{
-			//tk_list = html_token_list_cons(create_character_token(temp_buf[i]), tk_list);
 			process_token(create_character_token(temp_buf[i]));
 		}
 
@@ -1999,13 +1929,6 @@ void script_data_escaped_state_s22(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
-	}
 	else
 	{
 		process_token(create_character_token(c));
@@ -2049,13 +1972,6 @@ void script_data_escaped_dash_state_s23(unsigned char *ch)
 		}
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -2107,13 +2023,6 @@ void script_data_escaped_dash_dash_state_s24(unsigned char *ch)
 		}
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -2482,13 +2391,6 @@ void script_data_double_escaped_state_s29(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
-	}
 	else
 	{
 		process_token(create_character_token(*ch));
@@ -2534,13 +2436,6 @@ void script_data_double_escaped_dash_state_s30(unsigned char *ch)
 			process_token(create_character_token(byte_seq[i]));
 		}
 		return;
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -2594,13 +2489,6 @@ void script_data_double_escaped_dash_dash_state_s31(unsigned char *ch)
 			process_token(create_character_token(byte_seq[i]));
 		}
 		return;
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -2766,13 +2654,6 @@ void before_attribute_name_state_s34(unsigned char *ch)
 		}
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
-	}
 	else
 	{
 		//add the attribute only if the current token is a start tag token
@@ -2861,13 +2742,6 @@ void attribute_name_state_s35(unsigned char *ch)
 	{
 		//parse error
 		curr_attr_name = string_append(curr_attr_name, c);
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -3011,13 +2885,6 @@ void after_attribute_name_state_s36(unsigned char *ch)
 
 		current_state = ATTRIBUTE_NAME_STATE;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
-	}
 	else
 	{
 		//if the attribute name is not already in the attribute list, 
@@ -3133,13 +3000,6 @@ void before_attribute_value_state_s37(unsigned char *ch)
 	
 		current_state = ATTRIBUTE_VALUE_UNQUOTED_STATE;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
-	}
 	else
 	{
 		//curr_attr_value = string_append(curr_attr_value, c);
@@ -3176,13 +3036,6 @@ void attribute_value_double_quoted_state_s38(unsigned char *ch)
 		//parse error
 		append_null_replacement_for_attribute_value();
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -3225,13 +3078,6 @@ void attribute_value_single_quoted_state_s39(unsigned char *ch)
 		//parse error
 		append_null_replacement_for_attribute_value();
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -3357,13 +3203,6 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 			attr_value_char_count += 1;
 		}
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -3532,13 +3371,6 @@ void after_attribute_value_quoted_state_s42(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
-	}
 	else
 	{
 		//parse error
@@ -3614,13 +3446,6 @@ void self_closing_start_tag_state_s43(unsigned char *ch)
 		process_token(curr_token);
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		;
 	}
 	else
 	{
@@ -3799,14 +3624,6 @@ void comment_start_state_s46(unsigned char *ch)
 		curr_token = NULL;
 		return;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, c);
@@ -3854,14 +3671,6 @@ void comment_start_dash_state_s47(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
@@ -3895,14 +3704,6 @@ void comment_state_s48(unsigned char *ch)
 		{
 			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
 		}
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -3938,14 +3739,6 @@ void comment_end_dash_state_s49(unsigned char *ch)
 		}
 		
 		current_state = COMMENT_STATE;
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -4001,14 +3794,6 @@ void comment_end_state_s50(unsigned char *ch)
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		//parse error
@@ -4063,14 +3848,6 @@ void comment_end_bang_state_s51(unsigned char *ch)
 		
 		current_state = COMMENT_STATE;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
@@ -4094,18 +3871,6 @@ void doctype_state_s52(unsigned char *ch)
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
 		current_state = BEFORE_DOCTYPE_NAME_STATE;
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token = create_doctype_token('\0');
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -4165,18 +3930,6 @@ void before_doctype_name_state_s53(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token = create_doctype_token('\0');
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token = create_doctype_token(c);
@@ -4225,17 +3978,6 @@ void doctype_name_state_s54(unsigned char *ch)
 			curr_token->dt.doctype_name = string_append(curr_token->dt.doctype_name, byte_seq[i]);
 		}
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token->dt.doctype_name = string_append(curr_token->dt.doctype_name, c);
@@ -4261,17 +4003,6 @@ void after_doctype_name_state_s55(unsigned char *ch)
 		process_token(curr_token);
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -4339,17 +4070,6 @@ void after_doctype_public_keyword_state_s56(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{	
 		//parse error
@@ -4390,17 +4110,6 @@ void before_doctype_public_identifier_state_s57(unsigned char *ch)
 		process_token(curr_token);
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -4446,17 +4155,6 @@ void doctype_public_identifier_double_quoted_state_s58(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{	
 		curr_token->dt.doctype_public_identifier = string_append(curr_token->dt.doctype_public_identifier, c);
@@ -4499,17 +4197,6 @@ void doctype_public_identifier_single_quoted_state_s59(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{	
 		curr_token->dt.doctype_public_identifier = string_append(curr_token->dt.doctype_public_identifier, c);
@@ -4548,17 +4235,6 @@ void after_doctype_public_identifier_state_s60(unsigned char *ch)
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, '\0');
 		current_state = DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED_STATE;
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		//parse error
@@ -4596,17 +4272,6 @@ void between_doctype_public_and_system_identifiers_state_s61(unsigned char *ch)
 	{	
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, '\0');
 		current_state = DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED_STATE;
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -4650,17 +4315,6 @@ void after_doctype_system_keyword_state_s62(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		//parse error
@@ -4700,17 +4354,6 @@ void before_doctype_system_identifier_state_s63(unsigned char *ch)
 		process_token(curr_token);
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
@@ -4755,17 +4398,6 @@ void doctype_system_identifier_double_quoted_state_s64(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, c);
@@ -4807,17 +4439,6 @@ void doctype_system_identifier_single_quoted_state_s65(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, c);
@@ -4844,17 +4465,6 @@ void after_doctype_system_identifier_state_s66(unsigned char *ch)
 		return;
 
 	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//parse error
-		//curr_token->dt.force_quirks_flag = ON;
-
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
-	}
 	else
 	{
 		//parse error
@@ -4876,14 +4486,6 @@ void bogus_doctype_state_s67(unsigned char *ch)
 		process_token(curr_token);
 		return;
 
-	}
-	else if(curr_buffer_index == buffer_len)	//equivalent to (c == EOF)
-	{
-		//current_state = DATA_STATE;
-		//character_consumption = RECONSUME;
-		
-		//return html_token_list_cons(curr_token, NULL);
-		;
 	}
 	else
 	{
