@@ -247,6 +247,8 @@ void process_eof(void);
 void append_null_replacement(void);
 void append_null_replacement_for_attribute_value(void);
 
+int is_in_a_script_data_parsing_state(void);
+
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
 /*------------------------------------------------------------------------*/
@@ -406,7 +408,7 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	}
 
 	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
-	//html_parse_memory_fragment(file_buffer, buffer_length, "span", root_ptr);
+	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
 
 	return 1;
 }
@@ -5401,36 +5403,70 @@ void in_body_mode(const token *tk)
 						(tk->cht.ch == CARRIAGE_RETURN) ||
 						(tk->cht.ch == SPACE))
 				{
-					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
-
-					//insert the character into the current node
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+					if(is_in_a_script_data_parsing_state() == 1)	//process script data in fragment case
 					{
-						;
+						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+						{
+							text_node *t = (text_node *)current_node->last_child;
+							t->text_data = string_append(t->text_data, tk->cht.ch);
+						}
+						else
+						{
+							text_node *t = create_text_node();
+							t->text_data = string_append(t->text_data, tk->cht.ch);
+							add_child_node(current_node, (node *)t);
+						}
 					}
-					else
+					else											//process normal text in body
 					{
-						text_node *t = create_text_node();		//create text node with empty string as data.
-						add_child_node(current_node, (node *)t);
+						//Reconstruct the active formatting elements , if any.
+						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
+
+						//insert the character into the current node
+						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+						{
+							;
+						}
+						else
+						{
+							text_node *t = create_text_node();		//create text node with empty string as data.
+							add_child_node(current_node, (node *)t);
+						}
 					}
 	
 				}
 				else
 				{
-					//Reconstruct the active formatting elements , if any.
-					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
-					
-					//Insert the token's character into the current node .
-					//Set the frameset-ok flag to "not ok".
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+					if(is_in_a_script_data_parsing_state() == 1)	//process script data in fragment case
 					{
-						;
+						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+						{
+							text_node *t = (text_node *)current_node->last_child;
+							t->text_data = string_append(t->text_data, tk->cht.ch);
+						}
+						else
+						{
+							text_node *t = create_text_node();
+							t->text_data = string_append(t->text_data, tk->cht.ch);
+							add_child_node(current_node, (node *)t);
+						}
 					}
-					else
+					else											//process normal text in body
 					{
-						text_node *t = create_text_node();		//create text node with empty string as data.
-						add_child_node(current_node, (node *)t);
+						//Reconstruct the active formatting elements , if any.
+						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
+					
+						//Insert the token's character into the current node .
+						//Set the frameset-ok flag to "not ok".
+						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+						{
+							;
+						}
+						else
+						{
+							text_node *t = create_text_node();		//create text node with empty string as data.
+							add_child_node(current_node, (node *)t);
+						}
 					}
 				}
 			}
@@ -6943,7 +6979,7 @@ void text_mode(const token *tk)
 	{
 		case TOKEN_CHARACTER:
 			{
-				if(strcmp(current_node->name, "script") == 0)
+				if(is_in_a_script_data_parsing_state() == 1)
 				{
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
@@ -9820,4 +9856,35 @@ void append_null_replacement_for_attribute_value(void)
 	utf8_byte_sequence(0xFFFD, byte_seq);
 	curr_attr_value = string_n_append(curr_attr_value, byte_seq, strlen(byte_seq));
 
+}
+
+
+/*------------------------------------------------------------------------------------*/
+int is_in_a_script_data_parsing_state(void)
+{
+	if((current_state == SCRIPT_DATA_STATE) ||
+	   (current_state == SCRIPT_DATA_LESS_THAN_SIGN_STATE) ||
+	   (current_state == SCRIPT_DATA_END_TAG_OPEN_STATE) ||
+	   (current_state == SCRIPT_DATA_END_TAG_NAME_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPE_START_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPE_START_DASH_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPED_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPED_DASH_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPED_DASH_DASH_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPED_LESS_THAN_SIGN_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPED_END_TAG_OPEN_STATE) ||
+	   (current_state == SCRIPT_DATA_ESCAPED_END_TAG_NAME_STATE) ||
+	   (current_state == SCRIPT_DATA_DOUBLE_ESCAPE_START_STATE) ||
+	   (current_state == SCRIPT_DATA_DOUBLE_ESCAPED_STATE) ||
+	   (current_state == SCRIPT_DATA_DOUBLE_ESCAPED_DASH_STATE) ||
+	   (current_state == SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH_STATE) ||
+	   (current_state == SCRIPT_DATA_DOUBLE_ESCAPED_LESS_THAN_SIGN_STATE) ||
+	   (current_state == SCRIPT_DATA_DOUBLE_ESCAPE_END_STATE))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
 }
