@@ -61,7 +61,6 @@ token *create_comment_token(void)
 	return tk;
 }
 
-
 token *create_character_token(unsigned char ch)
 {
 	token *tk;
@@ -69,6 +68,18 @@ token *create_character_token(unsigned char ch)
 	
 	tk->type = TOKEN_CHARACTER;
 	tk->cht.ch = ch;
+
+	return tk;
+}
+
+token *create_multi_char_token(unsigned char *mch, long char_count)
+{
+	token *tk;
+	tk = malloc(sizeof(token));
+
+	tk->type = TOKEN_MULTI_CHAR;
+	tk->mcht.mch = mch;
+	tk->mcht.char_count = char_count;
 
 	return tk;
 }
@@ -122,6 +133,9 @@ void free_token(token *tk)
 				break;
 
 			case TOKEN_CHARACTER:
+				break;
+
+			case TOKEN_MULTI_CHAR:
 				break;
 
 			case TOKEN_EOF:
@@ -466,6 +480,12 @@ void html_print_token(token *tk)
 			printf("Token type: CHARACTER.\n");
 			printf("Character: ");
 			putchar(tk->cht.ch);
+			break;
+
+		case TOKEN_MULTI_CHAR:
+			printf("Token type: MULTI_CHAR.\n");
+			printf("First character: %c\n", *(tk->mcht.mch));
+			printf("Character count: %d\n", tk->mcht.char_count);
 			break;
 
 		case TOKEN_EOF:

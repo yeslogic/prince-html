@@ -388,6 +388,7 @@ long text_char_count = 0;
 long curr_buffer_index;
 long buffer_len;
 
+int script_data_optimisation_done = 0;
 int character_skip = 0;
 
 element_node *doc_root;
@@ -786,6 +787,34 @@ void rawtext_state_s5(unsigned char *ch)
 void script_data_state_s6(unsigned char *ch)
 {
 	unsigned char c = *ch;
+
+	//only perform script data optimisation once:
+	if(script_data_optimisation_done == 0)
+	{
+		unsigned char *curr_ch = ch;
+		long curr_ch_index = curr_buffer_index;
+		long ch_count = 0;
+
+		while((*curr_ch != LESS_THAN_SIGN) && (*curr_ch != NULL_CHARACTER) && (curr_ch_index < buffer_len))
+		{
+			curr_ch_index += 1;
+			curr_ch += 1;
+			ch_count += 1;
+		}
+
+		if(ch_count > 0)
+		{
+			character_skip = ch_count - 1;
+			process_token(create_multi_char_token(ch, ch_count));
+		}
+		else
+		{
+			character_consumption = RECONSUME;
+		}
+
+		script_data_optimisation_done = 1;
+		return;
+	}
 
 	if(c == LESS_THAN_SIGN)
 	{
@@ -5403,7 +5432,7 @@ void in_body_mode(const token *tk)
 						(tk->cht.ch == CARRIAGE_RETURN) ||
 						(tk->cht.ch == SPACE))
 				{
-					if(is_in_a_script_data_parsing_state() == 1)	//process script data in fragment case
+					if(is_in_a_script_data_parsing_state())	//process script data in fragment case
 					{
 						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 						{
@@ -5437,7 +5466,7 @@ void in_body_mode(const token *tk)
 				}
 				else
 				{
-					if(is_in_a_script_data_parsing_state() == 1)	//process script data in fragment case
+					if(is_in_a_script_data_parsing_state())	//process script data in fragment case
 					{
 						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 						{
@@ -5470,8 +5499,24 @@ void in_body_mode(const token *tk)
 					}
 				}
 			}
-
 			break;
+
+		case TOKEN_MULTI_CHAR:						//only the SCRIPT_DATA_STATE will produce this type of token
+			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
+				}
+				else
+				{
+					text_node *t = create_text_node();
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
+					add_child_node(current_node, (node *)t);
+				}
+			}
+			break;
+
 		case TOKEN_COMMENT:
 			{
 				comment_node *c;
@@ -6979,7 +7024,7 @@ void text_mode(const token *tk)
 	{
 		case TOKEN_CHARACTER:
 			{
-				if(is_in_a_script_data_parsing_state() == 1)
+				if(is_in_a_script_data_parsing_state())
 				{
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
@@ -7007,6 +7052,21 @@ void text_mode(const token *tk)
 				}
 				//note: if current node is 'textarea' ignore LINE_FEED characters at the beginning of text
 
+			}
+			break;
+		case TOKEN_MULTI_CHAR:						//only the SCRIPT_DATA_STATE will produce this type of token
+			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
+				}
+				else
+				{
+					text_node *t = create_text_node();
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
+					add_child_node(current_node, (node *)t);
+				}
 			}
 			break;
 		case TOKEN_END_TAG:
