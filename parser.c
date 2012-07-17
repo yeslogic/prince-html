@@ -388,7 +388,6 @@ long text_char_count = 0;
 long curr_buffer_index;
 long buffer_len;
 
-int script_data_optimisation_done = 0;
 int character_skip = 0;
 
 element_node *doc_root;
@@ -788,33 +787,6 @@ void script_data_state_s6(unsigned char *ch)
 {
 	unsigned char c = *ch;
 
-	//only perform script data optimisation once:
-	if(script_data_optimisation_done == 0)
-	{
-		unsigned char *curr_ch = ch;
-		long curr_ch_index = curr_buffer_index;
-		long ch_count = 0;
-
-		while((*curr_ch != LESS_THAN_SIGN) && (*curr_ch != NULL_CHARACTER) && (curr_ch_index < buffer_len))
-		{
-			curr_ch_index += 1;
-			curr_ch += 1;
-			ch_count += 1;
-		}
-
-		if(ch_count > 0)
-		{
-			character_skip = ch_count - 1;
-			process_token(create_multi_char_token(ch, ch_count));
-		}
-		else
-		{
-			character_consumption = RECONSUME;
-		}
-
-		script_data_optimisation_done = 1;
-		return;
-	}
 
 	if(c == LESS_THAN_SIGN)
 	{
@@ -838,10 +810,22 @@ void script_data_state_s6(unsigned char *ch)
 	}
 	else
 	{
-		process_token(create_character_token(c));
+		unsigned char *curr_ch = ch;
+		long curr_ch_index = curr_buffer_index;
+		long ch_count = 0;
+
+		while((*curr_ch != LESS_THAN_SIGN) && (*curr_ch != NULL_CHARACTER) && (curr_ch_index < buffer_len))
+		{
+			curr_ch_index += 1;
+			curr_ch += 1;
+			ch_count += 1;
+		}
+
+		//the value of ch_count must be at least 1, having come out of the while loop.
+		character_skip = ch_count - 1;
+		process_token(create_multi_char_token(ch, ch_count));
 		return;
 	}
-
 }
 
 
