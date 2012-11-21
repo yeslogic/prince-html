@@ -643,12 +643,12 @@ void character_reference_in_data_state_s2(unsigned char *ch)
 
 		text_buffer = string_n_append(text_buffer, char_ref, strlen(char_ref));
 
-		free(char_ref);
 		character_skip = chars_consumed - 1;
 
 		//only necessary if the character reference is at the beginning of the text node.
 		//send a char token to the tree construction to get a text node created and added to the tree.
 		process_token(create_character_token(char_ref[0]));
+		free(char_ref);
 		return;
 	}
 }
@@ -737,12 +737,12 @@ void character_reference_in_rcdata_state_s4(unsigned char *ch)
 
 		text_buffer = string_n_append(text_buffer, char_ref, strlen(char_ref));
 
-		free(char_ref);
 		character_skip = chars_consumed - 1;
 
 		//only necessary if the character reference is at the beginning of the text node.
 		//send a char token to the tree construction to get a text node created and added to the tree.
 		process_token(create_character_token(char_ref[0]));
+		free(char_ref);
 		return;
 	}
 }
