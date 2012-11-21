@@ -126,6 +126,7 @@ typedef enum {
 } insertion_mode;
 
 
+
 /*----------------TOKENISER STATE TRANSITION FUNCTIONS--------------------*/
 /*------------------------------------------------------------------------*/
 void data_state_s1(unsigned char *ch);
@@ -994,6 +995,7 @@ void tag_name_state_s10(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -1246,6 +1248,7 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 			current_state = DATA_STATE;
 
 			process_token(curr_token);
+			curr_token = NULL;
 			return;
 		}
 		else
@@ -1533,6 +1536,7 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 			current_state = DATA_STATE;
 
 			process_token(curr_token);
+			curr_token = NULL;
 			return;
 		}
 		else
@@ -1791,6 +1795,7 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			current_state = DATA_STATE;
 			
 			process_token(curr_token);
+			curr_token = NULL;
 			return;
 		}
 		else
@@ -2242,6 +2247,7 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 			current_state = DATA_STATE;
 
 			process_token(curr_token);
+			curr_token = NULL;
 			return;
 		}
 		else
@@ -2613,6 +2619,7 @@ void before_attribute_name_state_s34(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
@@ -2732,6 +2739,7 @@ void attribute_name_state_s35(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
@@ -2813,6 +2821,7 @@ void after_attribute_name_state_s36(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -2999,6 +3008,7 @@ void before_attribute_value_state_s37(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -3190,6 +3200,7 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -3383,6 +3394,7 @@ void after_attribute_value_quoted_state_s42(unsigned char *ch)
 		}
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -3459,6 +3471,7 @@ void self_closing_start_tag_state_s43(unsigned char *ch)
 		curr_attr_value = NULL;
 	
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -3942,6 +3955,7 @@ void before_doctype_name_state_s53(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -3970,6 +3984,7 @@ void doctype_name_state_s54(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4016,6 +4031,7 @@ void after_doctype_name_state_s55(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4082,6 +4098,7 @@ void after_doctype_public_keyword_state_s56(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4123,6 +4140,7 @@ void before_doctype_public_identifier_state_s57(unsigned char *ch)
 		current_state = DATA_STATE;
 		
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4167,6 +4185,7 @@ void doctype_public_identifier_double_quoted_state_s58(unsigned char *ch)
 		current_state = DATA_STATE;
 		
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4209,6 +4228,7 @@ void doctype_public_identifier_single_quoted_state_s59(unsigned char *ch)
 		current_state = DATA_STATE;
 		
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4235,6 +4255,7 @@ void after_doctype_public_identifier_state_s60(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4275,6 +4296,7 @@ void between_doctype_public_and_system_identifiers_state_s61(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4327,6 +4349,7 @@ void after_doctype_system_keyword_state_s62(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4367,6 +4390,7 @@ void before_doctype_system_identifier_state_s63(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4410,6 +4434,7 @@ void doctype_system_identifier_double_quoted_state_s64(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4451,6 +4476,7 @@ void doctype_system_identifier_single_quoted_state_s65(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4477,6 +4503,7 @@ void after_doctype_system_identifier_state_s66(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
@@ -4499,6 +4526,7 @@ void bogus_doctype_state_s67(unsigned char *ch)
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
+		curr_token = NULL;
 		return;
 
 	}
