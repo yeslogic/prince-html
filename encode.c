@@ -318,7 +318,7 @@ int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_inde
 						}
 					}
 					//current byte is not a white space
-					if(file_buffer[*buf_index] != EQUALS_SIGN)
+					if((*buf_index < buffer_length) && (file_buffer[*buf_index] != EQUALS_SIGN))
 					{	
 						return 1;		//attribute name is *attr_name, value is the empty string.
 					}
