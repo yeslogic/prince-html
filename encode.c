@@ -395,11 +395,11 @@ int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_inde
 					*buf_index += 1;
 				}
 			}
-			else if(file_buffer[*buf_index] == GREATER_THAN_SIGN)
+			else if((*buf_index < buffer_length) && (file_buffer[*buf_index] == GREATER_THAN_SIGN))
 			{
 				return 1;  //attribute name is *attr_name, value is the empty string.
 			}
-			else if((file_buffer[*buf_index] >= CAPITAL_A) && (file_buffer[*buf_index] <= CAPITAL_Z))
+			else if((*buf_index < buffer_length) && ((file_buffer[*buf_index] >= CAPITAL_A) && (file_buffer[*buf_index] <= CAPITAL_Z)))
 			{
 				unsigned char c = file_buffer[*buf_index] + CAPITAL_TO_SMALL;
 				*attr_value = string_append(*attr_value, c);
@@ -407,9 +407,12 @@ int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_inde
 			}	
 			else
 			{
-				unsigned char c = file_buffer[*buf_index];
-				*attr_value = string_append(*attr_value, c);
-				*buf_index += 1;
+				if(*buf_index < buffer_length)
+				{
+					unsigned char c = file_buffer[*buf_index];
+					*attr_value = string_append(*attr_value, c);
+					*buf_index += 1;
+				}
 			}
 
 			//Step 11. Process the byte at position as follows:
