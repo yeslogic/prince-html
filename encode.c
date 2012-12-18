@@ -38,8 +38,13 @@ unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
 {
 	long buf_index;
 	
-	buf_index = 0;
+	if((buffer_length >= 3) && 
+	   ((file_buffer[0] == 0xEF) && (file_buffer[1] == 0xBB) && (file_buffer[2] == 0xBF)))
+	{
+		return strdup("utf-8");
+	}
 
+	buf_index = 0;
 	while(buf_index < buffer_length)
 	{
 		//A sequence of bytes starting with "<!--" and ending with "-->"

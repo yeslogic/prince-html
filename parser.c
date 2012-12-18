@@ -513,7 +513,18 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	buffer_len = buffer_length;
 	curr_buffer_index = 0;
 
-	curr_index = 0;
+
+	//if there is a UTF-8 Byte Order Mark, skip it.
+	if((buffer_length >= 3) && 
+			((file_buffer[0] == 0xEF) && (file_buffer[1] == 0xBB) && (file_buffer[2] == 0xBF)))
+	{
+		curr_index = 3;
+	}
+	else
+	{
+		curr_index = 0;
+	}
+
 	while(curr_index < buffer_length)
 	{
 		curr_char = &file_buffer[curr_index];
