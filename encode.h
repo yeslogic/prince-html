@@ -18,3 +18,11 @@ unsigned char *get_file_encoding(unsigned char *file_name);
 /*returns a string representing the character encoding, or NULL if no character encoding can be found.
   the returned string should be freed after use.*/
 unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length);
+
+
+/*returns 1 if encoding is utf-8, 0 if encoding is not utf-8*/
+int check_utf8_encoding(unsigned char *file_buffer, long buffer_length);
+
+
+/*returns -1 if file cannot be read into buffer, 1 if encoding is verified to be utf-8, 0 otherwise*/
+int check_file_utf8_encoding(unsigned char *file_name);

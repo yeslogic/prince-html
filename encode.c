@@ -32,6 +32,21 @@ unsigned char *get_file_encoding(unsigned char *file_name)
 	
 	return get_encoding(file_buffer, buffer_length);
 }
+
+/*--------------------------------------------------------------------*/
+/*returns -1 if file cannot be read into buffer, 1 if encoding is verified to be utf-8, 0 otherwise*/
+int check_file_utf8_encoding(unsigned char *file_name)
+{
+	unsigned char *file_buffer;
+	long buffer_length;
+
+	if((file_buffer = read_file(file_name, &buffer_length)) == NULL)
+	{
+		return -1;
+	}
+	
+	return check_utf8_encoding(file_buffer, buffer_length);
+}
 /*--------------------------------------------------------------------*/
 /*returns a string representing the character encoding, or NULL if no character encoding can be found*/
 unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
@@ -601,3 +616,105 @@ unsigned char *get_charset_from_content(unsigned char *attr_value)
 	return NULL;
 }
 
+
+/*--------------------------------------------------------------------*/
+/*returns 1 if encoding is utf-8, 0 if encoding is not utf-8*/
+int check_utf8_encoding(unsigned char *file_buffer, long buffer_length)
+{
+	long buf_index;
+
+	
+	buf_index = 0;
+	while(buf_index < buffer_length)
+	{
+		unsigned char c = file_buffer[buf_index];
+
+		if((c & 0x80) == 0x00)		//the byte is 0xxx xxxx
+		{
+			;
+		}
+		else if((c & 0xC0) == 0x80)	 //the byte is 10xx xxxx
+		{
+			return 0;
+		}
+		else if((c & 0xE0) == 0xC0)	 //the byte is 110x xxxx
+		{
+			//then check the next byte
+			if((buf_index + 1) < buffer_length)
+			{
+				unsigned char nc = file_buffer[buf_index + 1];
+
+				if((nc & 0xC0) == 0x80)	//the next byte is 10xx xxxx
+				{
+					return 1;	//should be utf-8
+				}
+				else
+				{
+					return 0;
+				}
+			}
+			else
+			{
+				return 0; //end of buffer, no trailing bytes.
+			}
+		}
+		else if((c & 0xF0) == 0xE0)	//the byte is 1110 xxxx
+		{
+			//then check the next two bytes
+			if((buf_index + 2) < buffer_length)
+			{
+				unsigned char nc1, nc2;
+
+				nc1 = file_buffer[buf_index + 1];
+				nc2 = file_buffer[buf_index + 2];
+
+				if(((nc1 & 0xC0) == 0x80) && ((nc2 & 0xC0) == 0x80))	//both bytes are 10xx xxxx
+				{
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+			else
+			{
+				return 0;  //end of buffer, no trailing bytes.
+			}
+		}
+		else if((c & 0xF8) == 0xF0)	  //the byte is 1111 0xxx
+		{
+			//then check the next three bytes
+			if((buf_index + 3) < buffer_length)
+			{
+				unsigned char nc1, nc2, nc3;
+
+				nc1 = file_buffer[buf_index + 1];
+				nc2 = file_buffer[buf_index + 2];
+				nc3 = file_buffer[buf_index + 3];
+
+				if(((nc1 & 0xC0) == 0x80) && ((nc2 & 0xC0) == 0x80) && ((nc3 & 0xC0) == 0x80)) //all three bytes are 10xx xxxx
+				{
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+			else
+			{
+				return 0; //end of buffer, no trailing bytes.
+			}
+		}
+		else
+		{
+			return 0;
+		}
+
+
+		buf_index += 1;
+	}
+
+	return 1;	//file buffer exhausted.
+}
