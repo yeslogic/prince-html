@@ -26,3 +26,12 @@ int check_utf8_encoding(unsigned char *file_buffer, long buffer_length);
 
 /*returns -1 if file cannot be read into buffer, 1 if encoding is verified to be utf-8, 0 otherwise*/
 int check_file_utf8_encoding(unsigned char *file_name);
+
+
+/*returns the buffer containing the verified, corrected version of the UTF-8 encoded file*/
+unsigned char *verify_utf8_encoding(unsigned char *file_buffer, long buf_len);
+
+
+/*returns the buffer containing the verified, corrected version of the UTF-8 encoded file,
+  returns NULL if the file cannot be read into the  buffer.*/
+unsigned char *verify_file_utf8_encoding(unsigned char *file_name);

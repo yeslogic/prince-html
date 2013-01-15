@@ -13,9 +13,45 @@
 
 int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_index,  
 				   unsigned char **attr_name, unsigned char **attr_value);
-
 unsigned char *get_charset_from_content(unsigned char *attr_value);
 
+
+int get_encoding_length(unsigned char leading_byte);
+int is_valid_utf8_trailing_byte(unsigned char trailing_byte);
+int get_utf8_code_point(unsigned char *encoding_sequence, unsigned long remaining_chars, unsigned int *code_point);
+unsigned int get_code_point_encoding_1(unsigned char *encoding_sequence);
+unsigned int get_code_point_encoding_2(unsigned char *encoding_sequence);
+unsigned int get_code_point_encoding_3(unsigned char *encoding_sequence);
+unsigned int get_code_point_encoding_4(unsigned char *encoding_sequence);
+unsigned char *append_replacement_char(unsigned char *buffer);
+
+int is_utf8_5_byte_encoding(unsigned char *encoding_sequence, unsigned long remaining_chars);
+int is_utf8_6_byte_encoding(unsigned char *encoding_sequence, unsigned long remaining_chars);
+int has_a_valid_trailing_byte(unsigned char *encoding_sequence, unsigned long remaining_chars);
+int has_only_one_valid_trailing_byte(unsigned char *encoding_sequence, unsigned long remaining_chars);
+int has_only_two_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars);
+int has_only_three_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars);
+int has_only_four_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars);
+
+
+/*--------------------------------------------------------------------*/
+/*file_name is the input file.
+  returns NULL if the file cannnot be read into file_buffer.
+  Otherwise returns the buffer with a verified, corrected UTF-8 encoded file*/
+unsigned char *verify_file_utf8_encoding(unsigned char *file_name)
+{
+	unsigned char *file_buffer;
+	long buffer_length;
+
+	if((file_buffer = read_file(file_name, &buffer_length)) == NULL)
+	{
+		return NULL;
+	}
+	else
+	{
+		return verify_utf8_encoding(file_buffer, buffer_length);
+	}
+}
 
 /*--------------------------------------------------------------------*/
 /*file_name is the input file.
@@ -718,3 +754,612 @@ int check_utf8_encoding(unsigned char *file_buffer, long buffer_length)
 
 	return 1;	//file buffer exhausted.
 }
+
+
+/*---------------------------------------------------------------------------*
+/*This function return 1 if encoding_sequence is a valid and complete UTF-8 encoding, the decoded code point is stored in code_point.
+  Otherwise it returns zero, with code_point undefined.
+  When the buffer has fewer characters left than required for a complete UTF-8 encoding, it returns 0.
+  5-byte and 6-byte UTF-8 encodings will not be processed and 0 is returned.
+  When the function returns 0, *code_point is undefined.
+ */
+int get_utf8_code_point(unsigned char *encoding_sequence, unsigned long remaining_chars, unsigned int *code_point)
+{
+	int encoding_length = get_encoding_length(encoding_sequence[0]);
+
+	switch (encoding_length)
+	{
+		case 1:
+			{
+				*code_point = get_code_point_encoding_1(encoding_sequence);
+				return 1;
+			}
+		case 2:
+			{
+				if((remaining_chars >= 2) && is_valid_utf8_trailing_byte(encoding_sequence[1]))
+				{
+					*code_point = get_code_point_encoding_2(encoding_sequence);
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+		case 3:
+			{
+				if((remaining_chars >= 3) && 
+				   is_valid_utf8_trailing_byte(encoding_sequence[1]) && 
+				   is_valid_utf8_trailing_byte(encoding_sequence[2]))
+				{
+					*code_point = get_code_point_encoding_3(encoding_sequence);
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+		case 4:
+			{
+				if((remaining_chars >= 4) &&
+				   is_valid_utf8_trailing_byte(encoding_sequence[1]) && 
+				   is_valid_utf8_trailing_byte(encoding_sequence[2]) && 
+				   is_valid_utf8_trailing_byte(encoding_sequence[3]))
+				{
+					*code_point = get_code_point_encoding_4(encoding_sequence);
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+		default:
+			return 0;
+	}
+
+}
+
+/*This function decodes a 1-byte UTF-8 encoding byte sequence and
+  returns the UTF-8 code point.
+  precondition:	1)encoding_sequence is a valid 1-byte long UTF-8 encoding. 
+*/
+unsigned int get_code_point_encoding_1(unsigned char *encoding_sequence)
+{
+	unsigned int code_point;
+	unsigned char bt1;
+
+	bt1 = encoding_sequence[0];
+
+	code_point = bt1;
+
+	return code_point;
+}
+
+
+/*This function decodes a 2-byte UTF-8 encoding byte sequence and
+  returns the UTF-8 code point.
+  precondition:	1)encoding_sequence is a valid 2-byte long UTF-8 encoding. 
+*/
+unsigned int get_code_point_encoding_2(unsigned char *encoding_sequence)
+{
+	unsigned int code_point, to_int;
+	unsigned char bt2, bt1;
+
+	bt2 = encoding_sequence[1];
+	bt2 = bt2 & 0x3F;
+
+	code_point = bt2;
+
+	bt1 = encoding_sequence[0];
+	bt1 = bt1 & 0x1F;
+
+	to_int = bt1;
+	to_int = to_int << 6;
+
+	code_point = code_point | to_int;
+
+	return code_point;
+
+}
+
+
+/*This function decodes a 3-byte UTF-8 encoding byte sequence and
+  returns the UTF-8 code point.
+  precondition:	1)encoding_sequence is a valid 3-byte long UTF-8 encoding. 
+*/
+unsigned int get_code_point_encoding_3(unsigned char *encoding_sequence)
+{
+	unsigned int code_point, to_int;
+	unsigned char bt3, bt2, bt1;
+
+	bt3 = encoding_sequence[2];
+	bt3 = bt3 & 0x3F;
+
+	code_point = bt3;
+
+	bt2 = encoding_sequence[1];
+	bt2 = bt2 & 0x3F;
+	
+	to_int = bt2;
+	to_int = to_int << 6;
+	 
+	code_point = code_point | to_int;
+
+	bt1 = encoding_sequence[0];
+	bt1 = bt1 & 0x0F;
+
+	to_int = bt1;
+	to_int = to_int << 12;
+
+	code_point = code_point | to_int;
+	
+	return code_point;
+
+}
+
+
+
+/*This function decodes a 4-byte UTF-8 encoding byte sequence and
+  returns the UTF-8 code point.
+  precondition:	1)encoding_sequence is a valid 4-byte long UTF-8 encoding. 
+*/
+unsigned int get_code_point_encoding_4(unsigned char *encoding_sequence)
+{
+	unsigned int code_point, to_int;
+	unsigned char bt4, bt3, bt2, bt1;
+
+	bt4 = encoding_sequence[3];
+	bt4 = bt4 & 0x3F;
+
+	code_point = bt4;
+
+	bt3 = encoding_sequence[2];
+	bt3 = bt3 & 0x3F;
+
+	to_int = bt3;
+	to_int = to_int << 6;
+
+	code_point = code_point | to_int;
+
+	bt2 = encoding_sequence[1];
+	bt2 = bt2 & 0x3F;
+
+	to_int = bt2;
+	to_int = to_int << 12;
+
+	code_point = code_point | to_int;
+
+	bt1 = encoding_sequence[0];
+	bt1 = bt1 & 0x07;
+
+	to_int = bt1;
+	to_int = to_int << 18;
+
+	code_point = code_point | to_int;
+	
+	return code_point;
+
+}
+
+
+/*The function checks the leading byte of the UTF-8 character sequence and 
+  returns the expected number of bytes in the encoding.
+  If the first byte of the sequence is an invalid leading byte, it returns zero.
+*/
+int get_encoding_length(unsigned char leading_byte)
+{
+	if((leading_byte & 0xFE) == 0xFC)
+	{
+		return 6;
+	}
+	else if((leading_byte & 0xFC) == 0xF8)
+	{
+		return 5;
+	}
+	else if((leading_byte & 0xF8) == 0xF0)
+	{
+		return 4;
+	}
+	else if((leading_byte & 0xF0) == 0xE0)
+	{
+		return 3;
+	}
+	else if((leading_byte & 0xE0) == 0xC0)
+	{
+		return 2;
+	}
+	else if((leading_byte & 0x80) == 0x0)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+
+}
+
+/*The function returns 1 if trailing_byte is valide UTF-8 trailing byte, otherwise returns 0*/
+int is_valid_utf8_trailing_byte(unsigned char trailing_byte)
+{
+	if((trailing_byte & 0xC0) == 0x80)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*This function returns 1 if encoding_sequence is a overlong form of UTF-8 encoding, *seq_len is the length of that sequence.
+  Otherwise returns 0. 
+  Only 2-byte to 4-byte encodings are checked for overlong. 
+  Zero is returned for 5-byte and 6-byte encodings regardless whether they are overlong.
+  Zero is returned for other invalid or incomplete UTF-8 encodings.
+  When 0 is returned, *seq_len is undefined.
+  When 1 is returned, the overlong form has been verified to have the required trailing bytes.
+*/
+int is_overlong_utf8(unsigned char *encoding_sequence, unsigned long remaining_chars, int *seq_len)
+{
+	int encoding_length = get_encoding_length(encoding_sequence[0]);
+
+	switch(encoding_length)
+	{
+		case 2:
+			{
+				if((remaining_chars >= 2) && 
+				   ((encoding_sequence[0] & 0xFE) == 0xC0) &&			//leading byte: 1100 000x
+				   (is_valid_utf8_trailing_byte(encoding_sequence[1])))  //trailing byte: 10xx xxxx
+				{
+					*seq_len = 2;
+					return 1;		//sequence is invalid utf-8 because it is overlong.
+				}
+				else
+				{
+					return 0;		//sequence is valid and not overlong utf-8, 
+									//or sequence is incomplete encoding,
+									//or sequence is an invalid encoding for some other reason.
+				}
+			}
+		case 3:
+			{
+				if((remaining_chars >= 3) && 
+				   (encoding_sequence[0] == 0xE0) &&						//leading byte: 1110 0000
+				   ((encoding_sequence[1] & 0xE0) == 0x80) &&				//1st trailing byte: 100x xxxx
+				   (is_valid_utf8_trailing_byte(encoding_sequence[2])))		//2nd trailing byte: 10xx xxxx
+				{
+					*seq_len = 3;
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+		case 4:
+			{
+				if((remaining_chars >= 4) &&
+				   (encoding_sequence[0] == 0xF0) &&						//leading byte:		 1111 0000
+				   ((encoding_sequence[1] & 0xF0) == 0x80) &&				//1st trailing byte: 1000 xxxx
+				   (is_valid_utf8_trailing_byte(encoding_sequence[2])) &&	//2nd trailing byte: 10xx xxxx
+				   (is_valid_utf8_trailing_byte(encoding_sequence[3])))		//3rd trailing byte: 10xx xxxx
+				{
+					*seq_len = 4;
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+
+			}
+		default:
+			{
+				return 0;
+			}
+	}
+}
+
+/*--------------------------------------------------------------------*/
+unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
+{
+	long buf_pos;
+	unsigned char curr_char;
+	unsigned char *output = NULL;
+	int seq_len;
+	unsigned int code_point;
+
+	
+	buf_pos = 0; //initialise buf_pos to 3 if there is a byte order mark.
+
+	while(buf_pos < buf_len)
+	{
+		curr_char = buffer[buf_pos];
+
+		//One byte in the range FE to FF
+		if((curr_char == 0xFE) || (curr_char == 0xFF))
+		{
+			output = append_replacement_char(output);
+			buf_pos += 1;
+		}
+		//overlong forms
+		else if(is_overlong_utf8(&buffer[buf_pos], (buf_len - buf_pos), &seq_len))
+		{
+			output = append_replacement_char(output);
+			buf_pos += seq_len;
+		}
+		//code point above U+10FFFF
+		else if((get_utf8_code_point(&buffer[buf_pos], (buf_len - buf_pos), &code_point) == 1) && (code_point > 0x10FFFF))
+		{
+			output = append_replacement_char(output);
+
+			buf_pos += 4;	//get_utf8_code_point() only processes up to 4-byte encodings.
+
+		}
+		//One byte in the range F8 to FB, followed by four bytes in the range 80 to BF
+		else if(is_utf8_5_byte_encoding(&buffer[buf_pos], (buf_len - buf_pos)))
+		{
+			output = append_replacement_char(output);
+			buf_pos += 5;
+		}
+		//One byte in the range FC to FD, followed by five bytes in the range 80 to BF
+		else if(is_utf8_6_byte_encoding(&buffer[buf_pos], (buf_len - buf_pos)))
+		{
+			output =  append_replacement_char(output);
+			buf_pos += 6;
+		}
+		//One byte in the range C0 to FD that is not followed by a byte in the range 80 to BF
+		//(a leading byte in range 1100 0000 - 1111 1101  not followd by a valid trailing byte)  
+		else if((buffer[buf_pos] >= 0xC0) && (buffer[buf_pos] <= 0xFD) && 
+			    !(has_a_valid_trailing_byte(&buffer[buf_pos], (buf_len - buf_pos))))	
+		{																			
+			output =  append_replacement_char(output);
+			buf_pos += 1;
+				
+		}
+		//One byte in the range E0 to FD, followed by a byte in the range 80 to BF that is not followed by a byte in the range 80 to BF.
+		//(a leading byte in range 1110 0000 - 1111 1101, followed by only one valid trailing byte. Should have at least two.)
+		else if((buffer[buf_pos] >= 0xE0) && (buffer[buf_pos] <= 0xFD) &&
+			    (has_only_one_valid_trailing_byte(&buffer[buf_pos], (buf_len - buf_pos))))	
+		{
+			output =  append_replacement_char(output);
+			buf_pos += 2;								//consume the leading byte and the trailing byte.
+		}
+		//One byte in the range F0 to FD, followed by two bytes in the range 80 to BF, the last of which is not followed by a byte in the range 80 to BF
+		//(a leading byte in range 1111 0000 - 1111 1101, followed by only two valid trailing bytes. Should have at least three.)
+		else if((buffer[buf_pos] >= 0xF0) && (buffer[buf_pos] <= 0xFD) &&
+			    (has_only_two_valid_trailing_bytes(&buffer[buf_pos], (buf_len - buf_pos))))	
+		{
+			output = append_replacement_char(output);
+			buf_pos += 3;								//consume the leading byte and the two trailing bytes.
+		}
+		//One byte in the range F8 to FD, followed by three bytes in the range 80 to BF, the last of which is not followed by a byte in the range 80 to BF
+		//(a leading byte in range 1111 1000 - 1111 1101, followed by only three valid trailing bytes. Should have at least four.)
+		else if((buffer[buf_pos] >= 0xF8) && (buffer[buf_pos] <= 0xFD) && 
+			    (has_only_three_valid_trailing_bytes(&buffer[buf_pos], (buf_len - buf_pos))))
+		{
+			output = append_replacement_char(output);
+			buf_pos += 4;								//consume the leading byte and the three trailing bytes.
+		}
+		//One byte in the range FC to FD, followed by four bytes in the range 80 to BF, the last of which is not followed by a byte in the range 80 to BF
+		//(a leading byte in range 1111 1100 - 1111 1101, followed by only four valid trailing bytes. Should have five.)
+		else if((buffer[buf_pos] >= 0xFC) && (buffer[buf_pos] <= 0xFD) && 
+				(has_only_four_valid_trailing_bytes(&buffer[buf_pos], (buf_len - buf_pos))))
+		{
+			output = append_replacement_char(output);
+			buf_pos += 5;								//consume the leading byte and the four trailing bytes.
+		}
+		//Any byte sequence that represents a code point in the range U+D800 to U+DFFF
+		else if((get_utf8_code_point(&buffer[buf_pos], (buf_len - buf_pos), &code_point) == 1) && 
+			    (code_point >= 0xD800) && 
+				(code_point <= 0xDFFF))
+		{
+			output = append_replacement_char(output);
+			buf_pos += 3;								//invalid code point range, replace the three bytes.
+		}
+		//A standalone trailing byte (in the range 0x80 - 0xBF)
+		else if((buffer[buf_pos] >= 0x80) && (buffer[buf_pos] <= 0xBF))
+		{
+			output = append_replacement_char(output);
+			buf_pos += 1;								//replace it with the replacement character
+		}
+		//good utf-8 sequence
+		else
+		{
+			if((buffer[buf_pos] >= 0x0) && (buffer[buf_pos] <= 0x7F))		//single byte encoding
+			{
+				output = string_n_append(output, &buffer[buf_pos], 1);
+				buf_pos += 1;
+			}
+			else if((buffer[buf_pos] & 0xE0) == 0xC0)						//2-byte encoding
+			{
+				output = string_n_append(output, &buffer[buf_pos], 2);
+				buf_pos += 2;
+			}
+			else if((buffer[buf_pos] & 0xF0) == 0xE0)						//3-byte encoding
+			{
+				output = string_n_append(output, &buffer[buf_pos], 3);
+				buf_pos += 3;	
+			}
+			else if((buffer[buf_pos] & 0xF8) == 0xF0)						//4-byte encoding
+			{
+				output = string_n_append(output, &buffer[buf_pos], 4);
+				buf_pos += 4;
+			}
+			else
+			{
+				;
+			}
+		}
+	}
+
+	return output;
+}
+
+
+/*This function appends the replacement character to the buffer.
+  It returns the new buffer with the replacement character appended to it.*/
+unsigned char *append_replacement_char(unsigned char *buffer)
+{
+	unsigned char byte_seq[5];
+
+	utf8_byte_sequence(0xFFFD, byte_seq);
+
+	return string_n_append(buffer, byte_seq, strlen(byte_seq));
+}
+
+/*This function returns 1 if encoding_sequence has 5 bytes and is a UTF-8 5-byte encoding.
+  It returns 0 if encoding_sequence has fewer than 5 bytes, or is not a UTF-8 5-byte encoding.*/
+int is_utf8_5_byte_encoding(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars >= 5) && 
+	   ((encoding_sequence[0] & 0xFC) == 0xF8) &&				//leading byte 1111 10xx
+	   (is_valid_utf8_trailing_byte(encoding_sequence[1])) &&	//1st trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[2])) &&	//2nd trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[3])) &&	//3rd trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[4])))		//4th trailing byte
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+/*This function returns 1 if encoding_sequence has 6 bytes and is a UTF-8 6-byte encoding.
+  It returns 0 if encoding_sequence has fewer than 6 bytes, or is not a UTF-8 6-byte encoding.*/
+int is_utf8_6_byte_encoding(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars >= 6) && 
+	   ((encoding_sequence[0] & 0xFE) == 0xFC) &&				//leading byte 1111 110x
+	   (is_valid_utf8_trailing_byte(encoding_sequence[1])) &&	//1st trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[2])) &&	//2nd trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[3])) &&   //3rd trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[4])) &&   //4th trailing byte
+	   (is_valid_utf8_trailing_byte(encoding_sequence[5])))		//5th trailing byte
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+/*This function returns 1 if there is a valid trailing byte following the leading byte,
+  It returns 0 if the leading byte is the last byte in the buffer, or the byte following it
+  is not a valid utf-8 trailing byte*/
+int has_a_valid_trailing_byte(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars >= 2) && (is_valid_utf8_trailing_byte(encoding_sequence[1])))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+/*This function returns 1 if there is one and only one valid trailing byte.
+  It returns 0 if there is no valid trailing bytes or there are more than one valid trailing bytes*/
+int has_only_one_valid_trailing_byte(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars == 2) && (is_valid_utf8_trailing_byte(encoding_sequence[1])))
+	{
+		return 1;		//there is only one trailing byte(last byte in buffer), and it is valid.
+	}
+	else if((remaining_chars > 2) && 
+		    (is_valid_utf8_trailing_byte(encoding_sequence[1])) && 
+		    !(is_valid_utf8_trailing_byte(encoding_sequence[2])))
+	{
+		return 1;		//1st trailing byte is valid, 2nd trailing byte is not valid
+	}
+	else
+	{
+		return 0;		//return 0, for all other cases.
+	}
+}
+
+/*This function returns 1 if there are two and only two valid trailing bytes.
+  It returns 0, if there is no valid trailing bytes or there are valid trailing bytes other than two*/
+int has_only_two_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars == 3) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[1])) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[2])))
+	{
+		return 1;
+	}
+	else if((remaining_chars > 3) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[1])) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[2])) && 
+	   !(is_valid_utf8_trailing_byte(encoding_sequence[3])))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+
+}
+
+/*This function returns 1 if there are three and only three valid trailing bytes.
+  It returns 0, if there is  no valid trailing bytes, or there are valid trailing bytes other than three.*/
+int has_only_three_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars == 4) &&
+	   (is_valid_utf8_trailing_byte(encoding_sequence[1])) &&
+	   (is_valid_utf8_trailing_byte(encoding_sequence[2])) &&
+	   (is_valid_utf8_trailing_byte(encoding_sequence[3])))
+	{
+		return 1;
+	}
+	else if((remaining_chars > 4) && 
+		    (is_valid_utf8_trailing_byte(encoding_sequence[1])) && 
+			(is_valid_utf8_trailing_byte(encoding_sequence[2])) && 
+			(is_valid_utf8_trailing_byte(encoding_sequence[3])) && 
+			!(is_valid_utf8_trailing_byte(encoding_sequence[4])))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+/*This function returns 1 if there are four and only four valid trailing bytes.
+  It returns 0, if there is no valid trailing bytes, or there are valid trailing bytes other than four.*/
+int has_only_four_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars)
+{
+	if((remaining_chars == 5) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[1])) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[2])) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[3])) && 
+	   (is_valid_utf8_trailing_byte(encoding_sequence[4])))
+	{
+		return 1;
+	}
+	else if((remaining_chars > 5) && 
+		    (is_valid_utf8_trailing_byte(encoding_sequence[1])) && 
+			(is_valid_utf8_trailing_byte(encoding_sequence[2])) && 
+			(is_valid_utf8_trailing_byte(encoding_sequence[3])) && 
+			(is_valid_utf8_trailing_byte(encoding_sequence[4])) && 
+			!(is_valid_utf8_trailing_byte(encoding_sequence[5])))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+
+}
+
