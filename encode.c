@@ -23,7 +23,7 @@ unsigned int get_code_point_encoding_1(unsigned char *encoding_sequence);
 unsigned int get_code_point_encoding_2(unsigned char *encoding_sequence);
 unsigned int get_code_point_encoding_3(unsigned char *encoding_sequence);
 unsigned int get_code_point_encoding_4(unsigned char *encoding_sequence);
-unsigned char *append_replacement_char(unsigned char *buffer);
+unsigned char *append_replacement_char(unsigned char *buffer, long buf_len, int *char_len);
 
 int is_utf8_5_byte_encoding(unsigned char *encoding_sequence, unsigned long remaining_chars);
 int is_utf8_6_byte_encoding(unsigned char *encoding_sequence, unsigned long remaining_chars);
@@ -33,12 +33,14 @@ int has_only_two_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned
 int has_only_three_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars);
 int has_only_four_valid_trailing_bytes(unsigned char *encoding_sequence, unsigned long remaining_chars);
 
+unsigned char *string_n_append_2(unsigned char *char_array_1, unsigned char *char_array_2, long len1, long len2);
+
 
 /*--------------------------------------------------------------------*/
 /*file_name is the input file.
   returns NULL if the file cannnot be read into file_buffer.
-  Otherwise returns the buffer with a verified, corrected UTF-8 encoded file*/
-unsigned char *verify_file_utf8_encoding(unsigned char *file_name)
+  Otherwise returns the buffer with a verified, correct version of UTF-8 encoded file*/
+unsigned char *verify_file_utf8_encoding(unsigned char *file_name, long *out_buf_len)
 {
 	unsigned char *file_buffer;
 	long buffer_length;
@@ -49,7 +51,7 @@ unsigned char *verify_file_utf8_encoding(unsigned char *file_name)
 	}
 	else
 	{
-		return verify_utf8_encoding(file_buffer, buffer_length);
+		return verify_utf8_encoding(file_buffer, buffer_length, out_buf_len);
 	}
 }
 
@@ -1065,59 +1067,125 @@ int is_overlong_utf8(unsigned char *encoding_sequence, unsigned long remaining_c
 }
 
 /*--------------------------------------------------------------------*/
-unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
+unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *out_buf_len)
 {
-	long buf_pos;
-	unsigned char curr_char;
-	unsigned char *output = NULL;
-	int seq_len;
+	long buf_pos, char_count, output_char_count;
+	unsigned char *chunk, *output;
+	int seq_len, repl_char_len, indicated_len;
 	unsigned int code_point;
 
 	
 	buf_pos = 0; //initialise buf_pos to 3 if there is a byte order mark.
+	output = NULL;
+	chunk = NULL;
+	char_count = 0;
+	output_char_count = 0;
 
 	while(buf_pos < buf_len)
 	{
-		curr_char = buffer[buf_pos];
+		indicated_len = get_encoding_length(buffer[buf_pos]);
 
 		//One byte in the range FE to FF
-		if((curr_char == 0xFE) || (curr_char == 0xFF))
+		if((buffer[buf_pos] == 0xFE) || (buffer[buf_pos] == 0xFF))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 1;
 		}
 		//overlong forms
-		else if(is_overlong_utf8(&buffer[buf_pos], (buf_len - buf_pos), &seq_len))
+		else if(((indicated_len >= 2) && (indicated_len <= 4)) && 
+				(is_overlong_utf8(&buffer[buf_pos], (buf_len - buf_pos), &seq_len)))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += seq_len;
 		}
 		//code point above U+10FFFF
-		else if((get_utf8_code_point(&buffer[buf_pos], (buf_len - buf_pos), &code_point) == 1) && (code_point > 0x10FFFF))
+		else if((indicated_len == 4) && 
+			    (get_utf8_code_point(&buffer[buf_pos], (buf_len - buf_pos), &code_point) == 1) && 
+				(code_point > 0x10FFFF))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 
 			buf_pos += 4;	//get_utf8_code_point() only processes up to 4-byte encodings.
 
 		}
 		//One byte in the range F8 to FB, followed by four bytes in the range 80 to BF
-		else if(is_utf8_5_byte_encoding(&buffer[buf_pos], (buf_len - buf_pos)))
+		else if((indicated_len == 5) && (is_utf8_5_byte_encoding(&buffer[buf_pos], (buf_len - buf_pos))))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 5;
 		}
 		//One byte in the range FC to FD, followed by five bytes in the range 80 to BF
-		else if(is_utf8_6_byte_encoding(&buffer[buf_pos], (buf_len - buf_pos)))
+		else if((indicated_len == 6) && (is_utf8_6_byte_encoding(&buffer[buf_pos], (buf_len - buf_pos))))
 		{
-			output =  append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 6;
 		}
 		//One byte in the range C0 to FD that is not followed by a byte in the range 80 to BF
-		//(a leading byte in range 1100 0000 - 1111 1101  not followd by a valid trailing byte)  
+		//(a leading byte in range 1100 0000 - 1111 1101  not followed by a valid trailing byte)  
 		else if((buffer[buf_pos] >= 0xC0) && (buffer[buf_pos] <= 0xFD) && 
 			    !(has_a_valid_trailing_byte(&buffer[buf_pos], (buf_len - buf_pos))))	
-		{																			
-			output =  append_replacement_char(output);
+		{	
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 1;
 				
 		}
@@ -1126,7 +1194,17 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
 		else if((buffer[buf_pos] >= 0xE0) && (buffer[buf_pos] <= 0xFD) &&
 			    (has_only_one_valid_trailing_byte(&buffer[buf_pos], (buf_len - buf_pos))))	
 		{
-			output =  append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 2;								//consume the leading byte and the trailing byte.
 		}
 		//One byte in the range F0 to FD, followed by two bytes in the range 80 to BF, the last of which is not followed by a byte in the range 80 to BF
@@ -1134,7 +1212,17 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
 		else if((buffer[buf_pos] >= 0xF0) && (buffer[buf_pos] <= 0xFD) &&
 			    (has_only_two_valid_trailing_bytes(&buffer[buf_pos], (buf_len - buf_pos))))	
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 3;								//consume the leading byte and the two trailing bytes.
 		}
 		//One byte in the range F8 to FD, followed by three bytes in the range 80 to BF, the last of which is not followed by a byte in the range 80 to BF
@@ -1142,7 +1230,17 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
 		else if((buffer[buf_pos] >= 0xF8) && (buffer[buf_pos] <= 0xFD) && 
 			    (has_only_three_valid_trailing_bytes(&buffer[buf_pos], (buf_len - buf_pos))))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 4;								//consume the leading byte and the three trailing bytes.
 		}
 		//One byte in the range FC to FD, followed by four bytes in the range 80 to BF, the last of which is not followed by a byte in the range 80 to BF
@@ -1150,44 +1248,80 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
 		else if((buffer[buf_pos] >= 0xFC) && (buffer[buf_pos] <= 0xFD) && 
 				(has_only_four_valid_trailing_bytes(&buffer[buf_pos], (buf_len - buf_pos))))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 5;								//consume the leading byte and the four trailing bytes.
 		}
 		//Any byte sequence that represents a code point in the range U+D800 to U+DFFF
-		else if((get_utf8_code_point(&buffer[buf_pos], (buf_len - buf_pos), &code_point) == 1) && 
+		else if((indicated_len == 3) &&
+			    (get_utf8_code_point(&buffer[buf_pos], (buf_len - buf_pos), &code_point) == 1) && 
 			    (code_point >= 0xD800) && 
 				(code_point <= 0xDFFF))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 3;								//invalid code point range, replace the three bytes.
 		}
 		//A standalone trailing byte (in the range 0x80 - 0xBF)
 		else if((buffer[buf_pos] >= 0x80) && (buffer[buf_pos] <= 0xBF))
 		{
-			output = append_replacement_char(output);
+			if(chunk != NULL)
+			{
+				output = string_n_append_2(output, chunk, output_char_count, char_count);
+
+				output_char_count += char_count;
+				chunk = NULL;
+				char_count = 0;
+			}
+
+			output = append_replacement_char(output, output_char_count, &repl_char_len);
+			output_char_count += repl_char_len;
 			buf_pos += 1;								//replace it with the replacement character
 		}
 		//good utf-8 sequence
 		else
 		{
-			if((buffer[buf_pos] >= 0x0) && (buffer[buf_pos] <= 0x7F))		//single byte encoding
+			if(chunk == NULL)
 			{
-				output = string_n_append(output, &buffer[buf_pos], 1);
+				chunk = &buffer[buf_pos];
+			}
+
+			if(indicated_len == 1)											//single byte encoding
+			{
+				char_count += 1;
 				buf_pos += 1;
 			}
-			else if((buffer[buf_pos] & 0xE0) == 0xC0)						//2-byte encoding
+			else if(indicated_len == 2)										//2-byte encoding
 			{
-				output = string_n_append(output, &buffer[buf_pos], 2);
+				char_count += 2;
 				buf_pos += 2;
 			}
-			else if((buffer[buf_pos] & 0xF0) == 0xE0)						//3-byte encoding
+			else if(indicated_len == 3)										//3-byte encoding
 			{
-				output = string_n_append(output, &buffer[buf_pos], 3);
+				char_count += 3;
 				buf_pos += 3;	
 			}
-			else if((buffer[buf_pos] & 0xF8) == 0xF0)						//4-byte encoding
+			else if(indicated_len == 4)									//4-byte encoding
 			{
-				output = string_n_append(output, &buffer[buf_pos], 4);
+				char_count += 4;
 				buf_pos += 4;
 			}
 			else
@@ -1196,20 +1330,35 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len)
 			}
 		}
 	}
+	
+	if(chunk == &buffer[0])
+	{
+		output = buffer;
+		output_char_count = buf_len;
+	}
+	else
+	{
+		output = string_n_append_2(output, chunk, output_char_count, char_count);
+		output_char_count += char_count;
+	}
+	
 
+	*out_buf_len = output_char_count;
 	return output;
 }
 
 
 /*This function appends the replacement character to the buffer.
   It returns the new buffer with the replacement character appended to it.*/
-unsigned char *append_replacement_char(unsigned char *buffer)
+unsigned char *append_replacement_char(unsigned char *buffer, long buf_len, int *char_len)
 {
 	unsigned char byte_seq[5];
 
 	utf8_byte_sequence(0xFFFD, byte_seq);
 
-	return string_n_append(buffer, byte_seq, strlen(byte_seq));
+	*char_len = strlen(byte_seq);
+
+	return string_n_append_2(buffer, byte_seq, buf_len, strlen(byte_seq));
 }
 
 /*This function returns 1 if encoding_sequence has 5 bytes and is a UTF-8 5-byte encoding.
@@ -1361,5 +1510,36 @@ int has_only_four_valid_trailing_bytes(unsigned char *encoding_sequence, unsigne
 		return 0;
 	}
 
+}
+
+/*This function returns a new char array that contains len1 number of chars from char_array_1 and len2 number of 
+  chars from char_array_2, ignoring any terminating NUL characters*/
+unsigned char *string_n_append_2(unsigned char *char_array_1, unsigned char *char_array_2, long len1, long len2)
+{
+	if((char_array_2 != NULL) && (len2 > 0))
+	{
+		unsigned char *new_buf;
+
+		if((char_array_1 == NULL) || (len1 == 0))
+		{
+			new_buf = malloc(len2);
+			memcpy(new_buf, char_array_2, len2);
+		}
+		else
+		{
+			new_buf = malloc(len1 + len2);
+			memcpy(new_buf, char_array_1, len1);
+			memcpy(&new_buf[len1], char_array_2, len2);
+
+			free(char_array_1);				//reclaim old buffer, when a new buffer is created.
+											//do not free char_array_2, as it is the original data not to be lost. 
+		}
+
+		return new_buf;
+	}
+	else
+	{
+		return char_array_1;
+	}
 }
 
