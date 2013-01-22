@@ -1085,8 +1085,18 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *o
 	{
 		indicated_len = get_encoding_length(buffer[buf_pos]);
 
+		if(indicated_len == 1)											//single byte encoding
+		{																//is always valid encoding.
+			if(chunk == NULL)											//condition checks can be skipped.
+			{
+				chunk = &buffer[buf_pos];
+			}
+			
+			char_count += 1;
+			buf_pos += 1;
+		}
 		//One byte in the range FE to FF
-		if((buffer[buf_pos] == 0xFE) || (buffer[buf_pos] == 0xFF))
+		else if((buffer[buf_pos] == 0xFE) || (buffer[buf_pos] == 0xFF))
 		{
 			if(chunk != NULL)
 			{
@@ -1303,13 +1313,8 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *o
 			{
 				chunk = &buffer[buf_pos];
 			}
-
-			if(indicated_len == 1)											//single byte encoding
-			{
-				char_count += 1;
-				buf_pos += 1;
-			}
-			else if(indicated_len == 2)										//2-byte encoding
+ 
+			if(indicated_len == 2)										//2-byte encoding
 			{
 				char_count += 2;
 				buf_pos += 2;
@@ -1331,7 +1336,12 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *o
 		}
 	}
 	
-	if(chunk == &buffer[0])
+	if(buf_len == 0)			//empty document
+	{
+		output = buffer;
+		output_char_count = buf_len;
+	}
+	else if(chunk == &buffer[0])
 	{
 		output = buffer;
 		output_char_count = buf_len;
@@ -1340,6 +1350,8 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *o
 	{
 		output = string_n_append_2(output, chunk, output_char_count, char_count);
 		output_char_count += char_count;
+
+		free(buffer);		//free old buffer.
 	}
 	
 
