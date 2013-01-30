@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
+#include <iconv.h>
+
 #include "util.h"
 #include "token.h"
 #include "encode.h"
@@ -35,6 +38,9 @@ int has_only_four_valid_trailing_bytes(unsigned char *encoding_sequence, unsigne
 
 unsigned char *string_n_append_2(unsigned char *char_array_1, unsigned char *char_array_2, long len1, long len2);
 
+
+int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsigned char *from_encoding, 
+					unsigned char **output_buffer, long *output_length);
 
 /*--------------------------------------------------------------------*/
 /*file_name is the input file.
@@ -1555,3 +1561,182 @@ unsigned char *string_n_append_2(unsigned char *char_array_1, unsigned char *cha
 	}
 }
 
+
+/*The function takes a file of arbitrary encoding and converts it to UTF-8 encoding.
+  If the file encoding is already UTF-8, it verifies it.
+  The verified, or converted UTF-8 file is loaded in output_buffer.
+  The function returns 1 if the file is successfully converted, or verified and loaded in buffer.
+  Otherwise it returns 0.*/
+int file_to_utf8(unsigned char *file_name, unsigned char **output_buffer, long *output_length)
+{
+	unsigned char *input_buffer;
+	long input_buffer_length;
+
+	input_buffer = read_file(file_name, &input_buffer_length);
+
+	if(input_buffer == NULL)
+	{
+		return 0;
+	}
+
+	return memory_to_utf8(input_buffer, input_buffer_length, output_buffer, output_length);
+
+}
+
+
+
+/*The function takes a buffer that contains a file of arbitrary encoding and converts it to UTF-8 encoding.
+  If the file encoding is already UTF-8, it verifies it.
+  The verified, or converted UTF-8 file is loaded in output_buffer.
+  The function returns 1 if the file is successfully converted, or verified and loaded in buffer.
+  Otherwise it returns 0.*/
+int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length, 
+				   unsigned char **output_buffer, long *output_length)
+{
+	unsigned char *encoding_in_meta;
+
+	assert(input_buffer != NULL);
+	
+	encoding_in_meta = get_encoding(input_buffer, input_buffer_length);
+
+	if(encoding_in_meta == NULL)
+	{
+		/*test code*/
+		printf("encoding in meta is: --NULL--\n");
+		/*---------*/
+
+
+
+		//check utf-8 encoding
+		if(check_utf8_encoding(input_buffer, input_buffer_length) == 1)
+		{
+			//verify utf-8
+
+			/*test code*/
+			printf("File has been checked. It looks like utf-8.\n");
+			/*---------*/
+
+			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
+
+			/*test code*/
+			printf("File has been verified as utf-8.\n");
+			/*---------*/
+
+			return 1;
+		}
+		else
+		{
+			//assume encoding is cp1252.
+			//convert to utf-8:
+
+			/*test code*/
+			printf("Assume file is cp1252.\n");
+			/*---------*/
+
+			/*test code*/
+			printf("File is to be converted to utf-8.\n");
+			/*---------*/
+
+			return convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
+		}
+
+	}
+	else
+	{
+		/*test code*/
+		printf("encoding in meta is: --%s--\n", encoding_in_meta);
+		/*---------*/
+
+
+		if(strcmp(encoding_in_meta, "utf-8") == 0)
+		{
+			//verify utf-8
+
+			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
+
+			/*test code*/
+			printf("File has been verified as utf-8.\n");
+			/*---------*/
+
+			return 1;
+			
+		}
+		else
+		{
+			//convert to utf-8
+
+			/*test code*/
+			printf("File is to be converted to utf-8.\n");
+			/*---------*/
+			
+			return convert_to_utf8(input_buffer, input_buffer_length, encoding_in_meta, output_buffer, output_length);
+		}
+	}
+}
+
+
+
+/*This function returns 1 if conversion is successful, returns 0 if conversion fails.*/
+int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsigned char *from_encoding, 
+					unsigned char **output_buffer, long *output_length)
+{
+	iconv_t conv_dscrtor;
+	long input_buf_len, output_buf_len, max_bytes_out;
+	unsigned char *input_buf, *temp_output, *temp_output_buf;
+
+	input_buf = input_buffer;
+	input_buf_len = input_buffer_length;
+
+	temp_output_buf = malloc(input_buffer_length * 2);
+	temp_output = temp_output_buf;
+
+	output_buf_len = input_buffer_length * 2;
+	max_bytes_out = output_buf_len;
+
+	conv_dscrtor = iconv_open("utf-8", from_encoding);
+
+	if(conv_dscrtor == (iconv_t)-1)
+	{
+		return 0;
+	}
+
+
+	while(iconv(conv_dscrtor, &input_buf, &input_buf_len, &temp_output, &max_bytes_out) == -1)
+	{
+		switch(errno)
+		{
+			case EILSEQ:
+				{
+					//An invalid multibyte sequence is encountered in the input.
+					return 0;
+				}
+			case EINVAL:
+				{
+					//An incomplete multibyte sequence is encountered in the input.
+					return 0;	
+				}
+			case E2BIG:
+				{
+					//The output buffer has no more room for the next converted character.
+					//increase the buffer:
+					temp_output_buf = realloc(temp_output_buf, output_buf_len * 2); 
+					temp_output = &temp_output_buf[output_buf_len - max_bytes_out];
+					max_bytes_out = output_buf_len + max_bytes_out;
+					output_buf_len = output_buf_len * 2;
+
+					break;
+				}
+			default:
+				{
+					//unknown error
+					return 0;
+				}
+		}
+	}
+
+	*output_length = (output_buf_len - max_bytes_out);
+	*output_buffer = temp_output_buf;
+
+	return 1;
+	
+}
