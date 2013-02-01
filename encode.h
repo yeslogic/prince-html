@@ -28,8 +28,11 @@ int check_utf8_encoding(unsigned char *file_buffer, long buffer_length);
 int check_file_utf8_encoding(unsigned char *file_name);
 
 
-/*returns the buffer containing the verified, correct version of the UTF-8 encoded file*/
-unsigned char *verify_utf8_encoding(unsigned char *file_buffer, long buf_len, long *out_buf_len);
+/*returns the buffer containing the verified, correct version of the UTF-8 encoded file.
+  This function could return the input buffer if the document is verified as valid UTF-8 without
+  any invalid sequences. The output buffer returned will be different to the input buffer 
+  if there are invalid sequences that have been replaced by replacement characters*/
+unsigned char *verify_utf8_encoding(unsigned char *input_buffer, long buf_len, long *out_buf_len);
 
 
 /*returns the buffer containing the verified, correct version of the UTF-8 encoded file,

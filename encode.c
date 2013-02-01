@@ -1073,6 +1073,9 @@ int is_overlong_utf8(unsigned char *encoding_sequence, unsigned long remaining_c
 }
 
 /*--------------------------------------------------------------------*/
+/*This function could return the input buffer if the document is verified as valid UTF-8 without
+  any invalid sequences. The output buffer returned will be different to input buffer if there are
+  invalid sequences that have been replaced by replacement characters*/
 unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *out_buf_len)
 {
 	long buf_pos, char_count, output_char_count;
@@ -1571,6 +1574,7 @@ int file_to_utf8(unsigned char *file_name, unsigned char **output_buffer, long *
 {
 	unsigned char *input_buffer;
 	long input_buffer_length;
+	int conv_result;
 
 	input_buffer = read_file(file_name, &input_buffer_length);
 
@@ -1579,8 +1583,14 @@ int file_to_utf8(unsigned char *file_name, unsigned char **output_buffer, long *
 		return 0;
 	}
 
-	return memory_to_utf8(input_buffer, input_buffer_length, output_buffer, output_length);
+	conv_result = memory_to_utf8(input_buffer, input_buffer_length, output_buffer, output_length);
 
+	if(input_buffer != *output_buffer)
+	{
+		free(input_buffer);
+	}
+
+	return conv_result;
 }
 
 
@@ -1602,9 +1612,8 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 	if(encoding_in_meta == NULL)
 	{
 		/*test code*/
-		printf("encoding in meta is: --NULL--\n");
+		//printf("encoding in meta is: --NULL--\n");
 		/*---------*/
-
 
 
 		//check utf-8 encoding
@@ -1613,13 +1622,13 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 			//verify utf-8
 
 			/*test code*/
-			printf("File has been checked. It looks like utf-8.\n");
+			//printf("File has been checked. It looks like utf-8.\n");
 			/*---------*/
 
 			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
 
 			/*test code*/
-			printf("File has been verified as utf-8.\n");
+			//printf("File has been verified as utf-8.\n");
 			/*---------*/
 
 			return 1;
@@ -1630,21 +1639,23 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 			//convert to utf-8:
 
 			/*test code*/
-			printf("Assume file is cp1252.\n");
+			//printf("Assume file is cp1252.\n");
 			/*---------*/
 
 			/*test code*/
-			printf("File is to be converted to utf-8.\n");
+			//printf("File is to be converted to utf-8.\n");
 			/*---------*/
 
-			return convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
+			convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
+
+			return 1;
 		}
 
 	}
 	else
 	{
 		/*test code*/
-		printf("encoding in meta is: --%s--\n", encoding_in_meta);
+		//printf("encoding in meta is: --%s--\n", encoding_in_meta);
 		/*---------*/
 
 
@@ -1655,7 +1666,7 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
 
 			/*test code*/
-			printf("File has been verified as utf-8.\n");
+			//printf("File has been verified as utf-8.\n");
 			/*---------*/
 
 			return 1;
@@ -1666,17 +1677,26 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 			//convert to utf-8
 
 			/*test code*/
-			printf("File is to be converted to utf-8.\n");
+			//printf("File is to be converted to utf-8.\n");
 			/*---------*/
 			
-			return convert_to_utf8(input_buffer, input_buffer_length, encoding_in_meta, output_buffer, output_length);
+			//try convert encoding_in_meta to UTF-8
+			if(convert_to_utf8(input_buffer, input_buffer_length, encoding_in_meta, output_buffer, output_length) == 1)
+			{
+				return 1;
+			}
+			else	//conversion failed because encoding_in_meta is not supported, try "cp1252". 
+			{	
+				convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
+				return 1;
+			}
 		}
 	}
 }
 
 
 
-/*This function returns 1 if conversion is successful, returns 0 if conversion fails.*/
+/*This function returns 1 if conversion is successful, returns 0 if conversion fails.(from_encoding is not a supported encoding)*/
 int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsigned char *from_encoding, 
 					unsigned char **output_buffer, long *output_length)
 {
@@ -1697,6 +1717,7 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 
 	if(conv_dscrtor == (iconv_t)-1)
 	{
+		free(temp_output_buf);
 		return 0;
 	}
 
@@ -1708,12 +1729,82 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 			case EILSEQ:
 				{
 					//An invalid multibyte sequence is encountered in the input.
-					return 0;
+					//skip a byte in the input buffer, and put a replacement char in the output buffer.
+					unsigned char byte_seq[5];
+					int repl_char_len, i;
+
+					utf8_byte_sequence(0xFFFD, byte_seq);
+
+					repl_char_len = strlen(byte_seq);
+
+					if(repl_char_len <= max_bytes_out)
+					{
+						//append replacement char to temp_output:
+						for(i = 0; i < repl_char_len; i++)
+						{
+							temp_output[i] = byte_seq[i];
+						}
+
+						//advance the output buffer pointer
+						temp_output += repl_char_len;
+						max_bytes_out -= repl_char_len;
+
+						//skip a byte in the input buffer
+						input_buf += 1;
+						input_buf_len -= 1;
+					}
+					else
+					{
+						//output buffer has no more room for the replacement char
+						//increase the output buffer
+						temp_output_buf = realloc(temp_output_buf, output_buf_len * 2); 
+						temp_output = &temp_output_buf[output_buf_len - max_bytes_out];
+						max_bytes_out = output_buf_len + max_bytes_out;
+						output_buf_len = output_buf_len * 2;
+					}
+
+					break;
 				}
 			case EINVAL:
 				{
 					//An incomplete multibyte sequence is encountered in the input.
-					return 0;	
+					//This indicates the end of the input buffer has been reached.
+					//Apppend a replacement char to the output buffer and terminate conversion:
+					unsigned char byte_seq[5];
+					int repl_char_len, i;
+
+					utf8_byte_sequence(0xFFFD, byte_seq);
+
+					repl_char_len = strlen(byte_seq);
+
+					if(repl_char_len <= max_bytes_out)
+					{
+						//append replacement char to temp_output:
+						for(i = 0; i < repl_char_len; i++)
+						{
+							temp_output[i] = byte_seq[i];
+						}
+
+						//decrement the max_byte_out
+						max_bytes_out -= repl_char_len;
+
+						*output_length = (output_buf_len - max_bytes_out);
+						*output_buffer = temp_output_buf;
+
+						return 1;
+
+					}
+					else
+					{
+						//output buffer has no more room for the replacement char
+						//increase the output buffer
+						temp_output_buf = realloc(temp_output_buf, output_buf_len * 2); 
+						temp_output = &temp_output_buf[output_buf_len - max_bytes_out];
+						max_bytes_out = output_buf_len + max_bytes_out;
+						output_buf_len = output_buf_len * 2;
+
+						break;
+					}
 				}
 			case E2BIG:
 				{
@@ -1729,7 +1820,41 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 			default:
 				{
 					//unknown error
-					return 0;
+					//skip a byte in the input buffer, and put a replacement char in the output buffer.
+					unsigned char byte_seq[5];
+					int repl_char_len, i;
+
+					utf8_byte_sequence(0xFFFD, byte_seq);
+
+					repl_char_len = strlen(byte_seq);
+
+					if(repl_char_len <= max_bytes_out)
+					{
+						//append replacement char to temp_output:
+						for(i = 0; i < repl_char_len; i++)
+						{
+							temp_output[i] = byte_seq[i];
+						}
+
+						//advance the output buffer pointer
+						temp_output += repl_char_len;
+						max_bytes_out -= repl_char_len;
+
+						//skip a byte in the input buffer
+						input_buf += 1;
+						input_buf_len -= 1;
+					}
+					else
+					{
+						//output buffer has no more room for the replacement char
+						//increase the output buffer
+						temp_output_buf = realloc(temp_output_buf, output_buf_len * 2); 
+						temp_output = &temp_output_buf[output_buf_len - max_bytes_out];
+						max_bytes_out = output_buf_len + max_bytes_out;
+						output_buf_len = output_buf_len * 2;
+					}
+
+					break;
 				}
 		}
 	}
