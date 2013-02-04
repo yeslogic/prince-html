@@ -97,6 +97,7 @@ unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
 {
 	long buf_index;
 	
+	//check utf-8 Byte Order Mark:
 	if((buffer_length >= 3) && 
 	   ((file_buffer[0] == 0xEF) && (file_buffer[1] == 0xBB) && (file_buffer[2] == 0xBF)))
 	{
@@ -1585,11 +1586,6 @@ int file_to_utf8(unsigned char *file_name, unsigned char **output_buffer, long *
 
 	conv_result = memory_to_utf8(input_buffer, input_buffer_length, output_buffer, output_length);
 
-	if(input_buffer != *output_buffer)
-	{
-		free(input_buffer);
-	}
-
 	return conv_result;
 }
 
@@ -1611,25 +1607,13 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 
 	if(encoding_in_meta == NULL)
 	{
-		/*test code*/
-		//printf("encoding in meta is: --NULL--\n");
-		/*---------*/
-
-
+	
 		//check utf-8 encoding
 		if(check_utf8_encoding(input_buffer, input_buffer_length) == 1)
 		{
 			//verify utf-8
 
-			/*test code*/
-			//printf("File has been checked. It looks like utf-8.\n");
-			/*---------*/
-
 			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
-
-			/*test code*/
-			//printf("File has been verified as utf-8.\n");
-			/*---------*/
 
 			return 1;
 		}
@@ -1637,14 +1621,6 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 		{
 			//assume encoding is cp1252.
 			//convert to utf-8:
-
-			/*test code*/
-			//printf("Assume file is cp1252.\n");
-			/*---------*/
-
-			/*test code*/
-			//printf("File is to be converted to utf-8.\n");
-			/*---------*/
 
 			convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
 
@@ -1654,20 +1630,12 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 	}
 	else
 	{
-		/*test code*/
-		//printf("encoding in meta is: --%s--\n", encoding_in_meta);
-		/*---------*/
-
 
 		if(strcmp(encoding_in_meta, "utf-8") == 0)
 		{
 			//verify utf-8
 
 			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
-
-			/*test code*/
-			//printf("File has been verified as utf-8.\n");
-			/*---------*/
 
 			return 1;
 			
@@ -1676,10 +1644,6 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 		{
 			//convert to utf-8
 
-			/*test code*/
-			//printf("File is to be converted to utf-8.\n");
-			/*---------*/
-			
 			//try convert encoding_in_meta to UTF-8
 			if(convert_to_utf8(input_buffer, input_buffer_length, encoding_in_meta, output_buffer, output_length) == 1)
 			{
@@ -1688,6 +1652,7 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 			else	//conversion failed because encoding_in_meta is not supported, try "cp1252". 
 			{	
 				convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
+
 				return 1;
 			}
 		}
@@ -1696,7 +1661,8 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 
 
 
-/*This function returns 1 if conversion is successful, returns 0 if conversion fails.(from_encoding is not a supported encoding)*/
+/*This function returns 1 if conversion is successful, returns 0 if conversion fails.(from_encoding is not a supported encoding)
+  The input_buffer is freed when the function returns 1. It is not freed when the function returns 0.*/
 int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsigned char *from_encoding, 
 					unsigned char **output_buffer, long *output_length)
 {
@@ -1791,6 +1757,8 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 						*output_length = (output_buf_len - max_bytes_out);
 						*output_buffer = temp_output_buf;
 
+						free(input_buffer);
+
 						return 1;
 
 					}
@@ -1861,6 +1829,8 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 
 	*output_length = (output_buf_len - max_bytes_out);
 	*output_buffer = temp_output_buf;
+
+	free(input_buffer);
 
 	return 1;
 	

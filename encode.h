@@ -52,6 +52,7 @@ int file_to_utf8(unsigned char *file_name, unsigned char **output_buffer, long *
   If the file encoding is already UTF-8, it verifies it.
   The verified, or converted UTF-8 file is loaded in output_buffer.
   The function returns 1 if the file is successfully converted, or verified and loaded in buffer.
-  Otherwise it returns 0.*/
+  Otherwise it returns 0. The caller of this function should not try to free the input_buffer. It would
+  have already been freed within the function if no longer needed.*/
 int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length, 
 				   unsigned char **output_buffer, long *output_length);
