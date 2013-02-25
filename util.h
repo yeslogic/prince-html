@@ -42,3 +42,7 @@ int is_dec_digit(unsigned char ch);
 unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_additional_allowed_char, 
 										unsigned char additional_allowed_char, int *chars_consumed,
 										long curr_buf_index, long buf_len);
+
+
+/*preprocess the input buffer of a document, new_len is the length of the buffer after being preprocessed*/
+void preprocess_input(unsigned char *buffer, long buf_len, long *new_len);
