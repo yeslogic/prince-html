@@ -389,6 +389,8 @@ long text_char_count = 0;
 long curr_buffer_index;
 long buffer_len;
 
+unsigned long line_number = 1;
+
 int character_skip = 0;
 
 element_node *doc_root;
@@ -530,6 +532,11 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 		curr_char = &file_buffer[curr_index];
 
 		current_char = curr_char;	//store value in global variable.
+
+		if(*curr_char == LINE_FEED)
+		{
+			line_number += 1;
+		}
 		
 		assert((current_state >= 0) && (current_state < NUM_TOKENIZATION_STATES));
 		assert((current_mode >= 0) && (current_mode < NUM_INSERTION_MODES));
@@ -831,6 +838,11 @@ void script_data_state_s6(unsigned char *ch)
 			curr_ch_index += 1;
 			curr_ch += 1;
 			ch_count += 1;
+
+			if(*curr_ch == LINE_FEED)
+			{
+				line_number += 1;
+			}
 		}
 
 		//the value of ch_count must be at least 1, having come out of the while loop.
@@ -3570,6 +3582,11 @@ void bogus_comment_state_s44(unsigned char *ch)
 		else
 		{
 			curr_token->cmt.comment = string_append(curr_token->cmt.comment, *(ch + j));
+
+			if(*(ch + j) == LINE_FEED)
+			{
+				line_number += 1;
+			}
 		}
 
 		j += 1;
@@ -4552,9 +4569,8 @@ void bogus_doctype_state_s67(unsigned char *ch)
 /*----------------------------------------------------------------------------*/
 void cdata_section_state_s68(unsigned char *ch)
 {
-	int i;
-	long curr_buf_index = curr_buffer_index;
-	token_list *tk_list;
+	long i;
+	long curr_index = curr_buffer_index;
 
 
 	//if there is text before "<![CDATA[", copy it to the text_buffer:
@@ -4566,80 +4582,51 @@ void cdata_section_state_s68(unsigned char *ch)
 	text_char_count = 0;
 
 
-	//if there are less than 3 chars left (including the current char *ch)
-	//no CDATA text in this case, no sequence "]]>" is possible. Go back to DATA state.
-	if((curr_buf_index + 2) > (buffer_len - 1))	
-	{
-		current_state = DATA_STATE;
-
-		//and start another chunk of text from the current_char:
-		text_chunk = current_char;
-		text_char_count = 1;
-
-		process_token(create_character_token(*ch));
-		return;
-	}
-
-	tk_list = NULL;
-	character_skip = 0;
 	i = 0;
-	while(!((*(ch + i) == ']') && (*(ch + 1 + i) == ']') && (*(ch + 2 + i) == '>')))
+	while((curr_index + i + 2) <= (buffer_len - 1))		//loop to a point where there are less than three chars left.
 	{
-		//tk_list =  html_token_list_cons(create_character_token(*(ch + i)), tk_list);
-		i += 1;
-		character_skip = (i - 1);
-
-		curr_buf_index += 1;
-		if((curr_buf_index + 2) > (buffer_len - 1))		//there are less than 3 chars left
+		//increment line_number, a global variable.
+		if(*(ch + i) == LINE_FEED)
 		{
-			//sequence "]]>" will not be found, copy text starting from ch, and go back to DATA state
-			//we need to create a text node, as it might or might not have been created.
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+			line_number += 1;
+		}
+
+		//there is an CDATA ending sequence "]]>"
+		if((*(ch + i) == ']') && (*(ch + i + 1) == ']') && (*(ch + i + 2) == '>'))
+		{
+			if(i > 0)
 			{
-				;
+				//copy i characters to text_buffer
+				text_buffer = string_n_append(text_buffer, ch, i);
+				
+				//get a text node created and added it to the tree.
+				process_token(create_character_token(*ch));
 			}
-			else
-			{
-				text_node *t = create_text_node();		//create text node with empty string as data.
-				add_child_node(current_node, (node *)t);
-			}
-			
-			text_buffer = string_n_append(text_buffer, ch, i);
+
+			//skip total number of characters consumed, less one.
+			character_skip = i + 2;
 
 			current_state = DATA_STATE;
 			return;
 		}
+
+		i += 1;
 	}
 
-	//if we are ever here, out of the while loop, it means the sequence "]]>" has been found.
-	//i should equal the number of characters before sequence "]]>" is found, starting from ch.
-	//if i == 0, it means sequence "<[CDATA[]]>" -- no text in CDATA.
+	//we have not found the ending sequence "]]>", and we have only two characters left in the buffer.
 
-	if(i > 0)
-	{
-		//we need to create a text node, as it might or might not have been created.
-		if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-		{
-			;
-		}
-		else
-		{
-			text_node *t = create_text_node();		//create text node with empty string as data.
-			add_child_node(current_node, (node *)t);
-		}
-	}
+	//copy (i + 2) characters to text_buffer (up to the EOF)
+	text_buffer = string_n_append(text_buffer, ch, (i + 2));
+				
+	//get a text node created and added it to the tree.
+	process_token(create_character_token(*ch));
 
-	//we do not need to assign text_buffer to text_data yet, as there may be more text after the CDATA section.
-	//the DATA state will handle that.
-	//all we need to do is copy the text in CDATA section to text_buffer and reset text_chunk and text_char_count.
-	//(text_chunk and text_char_count has been reset at the beginning of this function)
-	text_buffer = string_n_append(text_buffer, ch, i);
-	
+	//skip total number of characters consumed, less one.
+	character_skip = i + 1;
 
-	character_skip = (i - 1) + 3;	//skipping one less the number of chars before "]]>" and "]]>" itself.
 	current_state = DATA_STATE;
-	
 }
+
 
 /*----------------------------------------------------------------------------*/
 
