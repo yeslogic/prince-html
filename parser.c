@@ -250,6 +250,8 @@ void append_null_replacement_for_attribute_value(void);
 
 int is_in_a_script_data_parsing_state(void);
 
+void parse_error(unsigned char *err_msg, unsigned long line_num);
+
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
 /*------------------------------------------------------------------------*/
@@ -377,7 +379,6 @@ int apply_foster_parenting = 0;	//(1 - apply foster parenting, 0 - not apply fos
 int previous_attribute_value_state_bookmark = 0;
 //(1 - ATTRIBUTE_VALUE_DOUBLE_QUOTED_STATE, 2 - ATTIBUTE_VALUE_SINGLE_QUOTED_STATE, 3 - ATTRIBUTE_VALUE_UNQUOTED_STATE)
 
-unsigned char *current_char;
 unsigned char *text_chunk = NULL;
 unsigned char *text_buffer = NULL;
 
@@ -409,6 +410,7 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 		//printf("Error in read_file()\n");
 		return 0;
 	}
+
 
 	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
@@ -466,6 +468,9 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 
 	start_mode = reset_insertion_mode_fragment(context);
 
+	//preprocessing input buffer, make LF the only character representing newlines.
+	preprocess_input(string_buffer, string_length, &string_length);
+
 	html_parse_memory_1(string_buffer, string_length, html_node, start_state, start_mode);
 
 	*root_ptr = (node *)doc_root;
@@ -479,6 +484,10 @@ void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **ro
 {
 	//create a document root element
 	doc_root = create_element_node("DOC", NULL, HTML);
+
+
+	//preprocessing input buffer, make LF the only character representing newlines.
+	preprocess_input(file_buffer, buffer_length, &buffer_length);
 
 	html_parse_memory_1(file_buffer, buffer_length, doc_root, DATA_STATE, INITIAL);
 	
@@ -505,8 +514,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 
 	assert(file_buffer != NULL);
 
-	//create a DOCTYPE token object
-	doc_type = malloc(sizeof(token));
+	/*----------------- initialize global variable ------------------------------*/
 
 	current_node = starting_node;
 	current_state = starting_state;
@@ -514,6 +522,42 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 
 	buffer_len = buffer_length;
 	curr_buffer_index = 0;
+
+	form_element_ptr = NULL;
+	head_element_ptr = NULL;
+	active_formatting_elements = NULL;
+	o_e_stack = NULL;
+
+	character_consumption = NOT_RECONSUME;
+	token_process = NOT_REPROCESS;
+
+	curr_token = NULL;
+	curr_token_attr_list = NULL;
+	curr_attr_name = NULL;
+	curr_attr_value = NULL;
+	temp_buf = NULL;
+	last_start_tag_name = NULL;
+	
+	apply_foster_parenting = 0;
+	previous_attribute_value_state_bookmark = 0;
+
+	text_chunk = NULL;
+	text_buffer = NULL;
+
+	attr_value_chunk = NULL;
+
+	attr_value_char_count = 0;
+	text_char_count = 0;
+
+	line_number = 1;
+
+	character_skip = 0;
+
+/*----------------- end of initialization ------------------------------*/
+
+
+	//create a DOCTYPE token object
+	doc_type = malloc(sizeof(token));
 
 
 	//if there is a UTF-8 Byte Order Mark, skip it.
@@ -531,7 +575,6 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	{
 		curr_char = &file_buffer[curr_index];
 
-		current_char = curr_char;	//store value in global variable.
 
 		if(*curr_char == LINE_FEED)
 		{
@@ -585,6 +628,7 @@ void data_state_s1(unsigned char *ch)
 	else if( c == NULL_CHARACTER)
 	{
 		//parse error, emit the current input character as a character token.
+		parse_error("NULL character.", line_number);
 		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
 		{
 				//copy the text from file buffer to text_buffer:
@@ -600,7 +644,7 @@ void data_state_s1(unsigned char *ch)
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
 		{
-			text_chunk = current_char;
+			text_chunk = ch;
 			text_char_count = 1;
 			process_token(create_character_token(c));
 			return;
@@ -694,7 +738,7 @@ void rcdata_state_s3(unsigned char *ch)
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
 		{
-			text_chunk = current_char;
+			text_chunk = ch;
 			text_char_count = 1;
 
 			process_token(create_character_token(c));
@@ -786,7 +830,7 @@ void rawtext_state_s5(unsigned char *ch)
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
 		{
-			text_chunk = current_char;
+			text_chunk = ch;
 			text_char_count = 1;
 	
 			process_token(create_character_token(c));
@@ -869,7 +913,7 @@ void plaintext_state_s7(unsigned char *ch)
 	{
 		if(text_char_count == 0)	//only send the first character in a chunk of text
 		{
-			text_chunk = current_char;
+			text_chunk = ch;
 			text_char_count = 1;
 
 			process_token(create_character_token(c));
@@ -3043,7 +3087,7 @@ void before_attribute_value_state_s37(unsigned char *ch)
 		//instead of appending current char to the curr_attr_value,
 		//mark the beginnig of the attribute value in the file buffer,
 		//and start counting the number of characters.
-		attr_value_chunk = current_char;
+		attr_value_chunk = ch;
 		attr_value_char_count = 1;
 	
 		current_state = ATTRIBUTE_VALUE_UNQUOTED_STATE;
@@ -3055,7 +3099,7 @@ void before_attribute_value_state_s37(unsigned char *ch)
 		//instead of appending current char to the curr_attr_value,
 		//mark the beginnig of the attribute value in the file buffer,
 		//and start counting the number of characters.
-		attr_value_chunk = current_char;
+		attr_value_chunk = ch;
 		attr_value_char_count = 1;
 
 		current_state = ATTRIBUTE_VALUE_UNQUOTED_STATE;
@@ -3094,7 +3138,7 @@ void attribute_value_double_quoted_state_s38(unsigned char *ch)
 		//start counting the number of characters.
 		if(attr_value_char_count == 0)
 		{
-			attr_value_chunk = current_char;
+			attr_value_chunk = ch;
 			attr_value_char_count = 1;
 		}
 		else
@@ -3136,7 +3180,7 @@ void attribute_value_single_quoted_state_s39(unsigned char *ch)
 		//start counting the number of characters.
 		if(attr_value_char_count == 0)
 		{
-			attr_value_chunk = current_char;
+			attr_value_chunk = ch;
 			attr_value_char_count = 1;
 		}
 		else
@@ -3244,7 +3288,7 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 		//start counting the number of characters.
 		if(attr_value_char_count == 0)
 		{
-			attr_value_chunk = current_char;
+			attr_value_chunk = ch;
 			attr_value_char_count = 1;
 		}
 		else
@@ -3262,7 +3306,7 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 		//start counting the number of characters.
 		if(attr_value_char_count == 0)
 		{
-			attr_value_chunk = current_char;
+			attr_value_chunk = ch;
 			attr_value_char_count = 1;
 		}
 		else
@@ -3312,7 +3356,7 @@ void ch_reference_in_attribute_value_state_s41(unsigned char *ch)
 		//not a character reference, so treat it as normal text.
 		if(attr_value_char_count == 0)	//no text before '&'
 		{
-			attr_value_chunk = (current_char - 1);	//mark the beginning of attribute value at '&'.
+			attr_value_chunk = (ch - 1);	//mark the beginning of attribute value at '&'.
 			attr_value_char_count = 1;				//the current char ch will be reconsumed, so do not count it yet.
 		}
 		else
@@ -4599,7 +4643,7 @@ void cdata_section_state_s68(unsigned char *ch)
 				//copy i characters to text_buffer
 				text_buffer = string_n_append(text_buffer, ch, i);
 				
-				//get a text node created and added it to the tree.
+				//get a text node created and added to the tree.
 				process_token(create_character_token(*ch));
 			}
 
@@ -4613,16 +4657,17 @@ void cdata_section_state_s68(unsigned char *ch)
 		i += 1;
 	}
 
-	//we have not found the ending sequence "]]>", and we have only two characters left in the buffer.
+	//we have not found the ending sequence "]]>", and reached the EOF.
 
-	//copy (i + 2) characters to text_buffer (up to the EOF)
-	text_buffer = string_n_append(text_buffer, ch, (i + 2));
-				
-	//get a text node created and added it to the tree.
+	//copy all the characters from ch up to the EOF to text_buffer 
+	text_buffer = string_n_append(text_buffer, ch, (buffer_len - curr_index));
+
+
+	//get a text node created and added to the tree.
 	process_token(create_character_token(*ch));
 
 	//skip total number of characters consumed, less one.
-	character_skip = i + 1;
+	character_skip = buffer_len - curr_index - 1;
 
 	current_state = DATA_STATE;
 }
@@ -9957,4 +10002,11 @@ int is_in_a_script_data_parsing_state(void)
 	{
 		return 0;
 	}
+}
+
+/*--------------------------------------------------------------------------------------*/
+void parse_error(unsigned char *err_msg, unsigned long line_num)
+{
+	printf("Line: %lu  Error: %s\n", line_num, err_msg);
+		
 }
