@@ -3675,9 +3675,10 @@ void markup_declaration_open_state_s45(unsigned char *ch)
 				then consume those characters and switch to the CDATA section state.)
 
 	*/
-	else if(((curr_buffer_index + 6) <= (buffer_len - 1)) && 
+	else if((current_node->name_space != HTML) &&
+			(((curr_buffer_index + 6) <= (buffer_len - 1)) && 
 			((*ch == '[') && (*(ch + 1) == 'C') && (*(ch + 2) == 'D') && (*(ch + 3) == 'A') && 
-			 (*(ch + 4) == 'T') && (*(ch + 5) == 'A') && (*(ch + 6) == '[')))
+			 (*(ch + 4) == 'T') && (*(ch + 5) == 'A') && (*(ch + 6) == '['))))
 	{
 		character_skip = 6;
 		current_state = CDATA_SECTION_STATE;
@@ -4614,7 +4615,12 @@ void bogus_doctype_state_s67(unsigned char *ch)
 void cdata_section_state_s68(unsigned char *ch)
 {
 	long i;
-	long curr_index = curr_buffer_index;
+	long temp_index = curr_buffer_index;
+	unsigned char *chunk_start;
+	unsigned char byte_seq[5];
+
+	//UTF-8 sequence for replacement char(0xFFFD)
+	utf8_byte_sequence(0xFFFD, byte_seq);
 
 
 	//if there is text before "<![CDATA[", copy it to the text_buffer:
@@ -4626,48 +4632,97 @@ void cdata_section_state_s68(unsigned char *ch)
 	text_char_count = 0;
 
 
+	chunk_start = ch;
 	i = 0;
-	while((curr_index + i + 2) <= (buffer_len - 1))		//loop to a point where there are less than three chars left.
+	while((temp_index + 2) <= (buffer_len - 1))		//loop to a point where there are less than three chars left.
 	{
 		//increment line_number, a global variable.
-		if(*(ch + i) == LINE_FEED)
+		if(*(chunk_start + i) == LINE_FEED)
 		{
 			line_number += 1;
 		}
 
-		//there is an CDATA ending sequence "]]>"
-		if((*(ch + i) == ']') && (*(ch + i + 1) == ']') && (*(ch + i + 2) == '>'))
+
+		//there is a CDATA ending sequence "]]>"
+		if((*(chunk_start + i) == ']') && (*(chunk_start + i + 1) == ']') && (*(chunk_start + i + 2) == '>'))
 		{
 			if(i > 0)
 			{
 				//copy i characters to text_buffer
-				text_buffer = string_n_append(text_buffer, ch, i);
+				text_buffer = string_n_append(text_buffer, chunk_start, i);
 				
 				//get a text node created and added to the tree.
-				process_token(create_character_token(*ch));
+				process_token(create_character_token(*chunk_start));
 			}
 
 			//skip total number of characters consumed, less one.
-			character_skip = i + 2;
+			character_skip = temp_index - curr_buffer_index + 2;
 
 			current_state = DATA_STATE;
 			return;
 		}
 
-		i += 1;
+		if(*(chunk_start + i) == NULL_CHARACTER)
+		{
+			//parse error
+
+			//copy the chunk up to the NULL char
+			text_buffer = string_n_append(text_buffer, chunk_start, i);
+
+			//append the replacement character
+			text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
+
+			//get a text node created and added to the tree.
+			process_token(create_character_token(*chunk_start));
+			
+			chunk_start += i + 1;
+
+			i = 0;
+		}
+		else
+		{
+			i += 1;
+		}
+
+		temp_index += 1;
 	}
 
 	//we have not found the ending sequence "]]>", and reached the EOF.
+	//temp_index will be the index of either the last character or the second last character.
 
-	//copy all the characters from ch up to the EOF to text_buffer 
-	text_buffer = string_n_append(text_buffer, ch, (buffer_len - curr_index));
+	//copy the chunk up to (but not including) the character temp_index is pointing at.
+	text_buffer = string_n_append(text_buffer, chunk_start, i);
+
+	//copy the remaining characters up to the EOF
+	while(temp_index <= (buffer_len - 1))
+	{
+		if(*(chunk_start + i) == LINE_FEED)
+		{
+			line_number += 1;
+		}
+
+		if(*(chunk_start + i) == NULL_CHARACTER)
+		{
+			//parse error
+			//append the replacement character
+			text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
+		}
+		else
+		{
+			//append the character
+			text_buffer = string_n_append(text_buffer, (chunk_start + i), 1);
+		}
+		
+		i += 1;
+		temp_index += 1;
+	}
 
 
 	//get a text node created and added to the tree.
-	process_token(create_character_token(*ch));
+	process_token(create_character_token(*chunk_start));
 
 	//skip total number of characters consumed, less one.
-	character_skip = buffer_len - curr_index - 1;
+	character_skip = buffer_len - curr_buffer_index - 1;
 
 	current_state = DATA_STATE;
 }
@@ -9541,7 +9596,7 @@ void parse_token_in_foreign_content(const token *tk)
 			break;
 		case TOKEN_COMMENT:
 			{
-				//Append a Comment node to the Document object with the data attribute set to the data given in the comment token.
+				//Append a Comment node to the current node with the data attribute set to the data given in the comment token.
 				comment_node *c;
 
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
