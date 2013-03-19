@@ -9519,36 +9519,19 @@ void parse_token_in_foreign_content(const token *tk)
 				if(tk->cht.ch == NULL_CHARACTER)
 				{
 					//Parse error. Insert a U+FFFD REPLACEMENT CHARACTER character into the current node.
-
-					/*
 					unsigned char byte_seq[5];
-					int len, i;
 
 					utf8_byte_sequence(0xFFFD, byte_seq);
-					len = strlen(byte_seq);
-
+					
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 					{
-						text_node *t = (text_node *)current_node->last_child;
-						
-						for(i = 0; i < len; i++)
-						{
-							t->text_data = string_append(t->text_data, byte_seq[i]);
-						}
+						;
 					}
 					else
 					{
-						text_node *t = create_text_node();
-						
-						for(i = 0; i < len; i++)
-						{
-							t->text_data = string_append(t->text_data, byte_seq[i]);
-						}
-
+						text_node *t = create_text_node();		//create text node with empty string as data.
 						add_child_node(current_node, (node *)t);
 					}
-					*/
-
 
 					//copy text_chunk from file buffer to text_buffer:
 					if((text_chunk != NULL) && (text_char_count > 0))
@@ -9557,6 +9540,9 @@ void parse_token_in_foreign_content(const token *tk)
 					}
 					text_chunk = NULL;
 					text_char_count = 0;
+
+					//append replacement character U+FFFD to the text_buffer
+					text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
 
 				}
 				else if((tk->cht.ch == CHARACTER_TABULATION) ||
