@@ -429,6 +429,8 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 	assert(string_buffer != NULL);
 	assert(context != NULL);
 
+	o_e_stack = NULL;
+
 	doc_root = create_element_node("DOC", NULL, HTML);
 	html_node = create_element_node("html", NULL, HTML);
 	add_child_node(doc_root, (node *)html_node);
@@ -482,9 +484,10 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 /*----------------------------------------------------------------------------*/
 void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **root_ptr, token **doctype_ptr)
 {
+	o_e_stack = NULL;
+
 	//create a document root element
 	doc_root = create_element_node("DOC", NULL, HTML);
-
 
 	//preprocessing input buffer, make LF the only character representing newlines.
 	preprocess_input(file_buffer, buffer_length, &buffer_length);
@@ -526,7 +529,6 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	form_element_ptr = NULL;
 	head_element_ptr = NULL;
 	active_formatting_elements = NULL;
-	o_e_stack = NULL;
 
 	character_consumption = NOT_RECONSUME;
 	token_process = NOT_REPROCESS;
