@@ -126,6 +126,33 @@ typedef enum {
 } insertion_mode;
 
 
+typedef enum {
+	NULL_CHARACTER_IN_TEXT,
+	UNEXPECTED_END_OF_FILE,
+	BOGUS_COMMENT,
+	UNESCAPED_LESS_THAN,
+	EMPTY_END_TAG,
+	BAD_CHARACTER_FOR_ATTRIBUTE_NAME,
+	MISSING_ATTRIBUTE_VALUE,
+	BAD_CHARACTER_FOR_ATTRIBUTE_VALUE,
+	MISSING_SPACE_AFTER_ATTRIBUTE_VALUE,
+	UNEXPECTED_SOLIDUS,
+	INVALID_COMMENT,
+	INVALID_DOCTYPE,
+	BOGUS_DOCTYPE,
+	MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE,
+	MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE,
+	MISSING_SPACE_AFTER_PUBLIC_IDENTIFIER,
+	MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE,
+	UNEXPECTED_TEXT,
+	UNEXPECTED_DOCTYPE,
+	UNEXPECTED_START_TAG,
+	UNEXPECTED_END_TAG,
+	DEPRECATED_TAG,
+	INVALID_END_TAG
+} error_message_type;
+
+
 
 /*----------------TOKENISER STATE TRANSITION FUNCTIONS--------------------*/
 /*------------------------------------------------------------------------*/
@@ -250,7 +277,7 @@ void append_null_replacement_for_attribute_value(void);
 
 int is_in_a_script_data_parsing_state(void);
 
-void parse_error(unsigned char *err_msg, unsigned long line_num);
+void parse_error(error_message_type err_msg, unsigned long line_num);
 
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
@@ -630,7 +657,7 @@ void data_state_s1(unsigned char *ch)
 	else if( c == NULL_CHARACTER)
 	{
 		//parse error, emit the current input character as a character token.
-		parse_error("NULL character.", line_number);
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
 		{
 				//copy the text from file buffer to text_buffer:
@@ -733,6 +760,7 @@ void rcdata_state_s3(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 		append_null_replacement();
 		return;
 	}
@@ -825,6 +853,7 @@ void rawtext_state_s5(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 		append_null_replacement();
 		return;
 	}
@@ -859,10 +888,11 @@ void script_data_state_s6(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
-
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
 		len = strlen(byte_seq);
@@ -907,6 +937,7 @@ void plaintext_state_s7(unsigned char *ch)
 	if(c == NULL_CHARACTER)
 	{
 		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 		append_null_replacement();
 		return;
 
@@ -960,11 +991,14 @@ void tag_open_state_s8(unsigned char *ch)
 	else if(c == QUESTION_MARK)
 	{
 		//parse error
+		parse_error(BOGUS_COMMENT, line_number);
 		current_state = BOGUS_COMMENT_STATE;
 	}
 	else
 	{
 		//parse error
+		parse_error(UNESCAPED_LESS_THAN, line_number);
+
 		current_state = DATA_STATE;
 		character_consumption = RECONSUME;
 
@@ -1007,7 +1041,9 @@ void end_tag_open_state_s9(unsigned char *ch)
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
-		//skip the following three characters "</>", totally ignore them.
+		parse_error(EMPTY_END_TAG, line_number);
+		//skip the following three characters: "</>", totally ignore them.
+
 		//------------------------------
 		if((text_chunk != NULL) && (text_char_count > 0))
 		{
@@ -1025,6 +1061,8 @@ void end_tag_open_state_s9(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_COMMENT, line_number);
+
 		current_state = BOGUS_COMMENT_STATE;
 	}
 
@@ -1087,29 +1125,26 @@ void tag_name_state_s10(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
+		unsigned char byte_seq[5];
+
 		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
 		//Append a U+FFFD REPLACEMENT CHARACTER 
 		//character to the current tag token's tag name.
-		unsigned char byte_seq[5];
-		int len, i;
-
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
+		if(curr_token->type == TOKEN_START_TAG)
 		{
-			if(curr_token->type == TOKEN_START_TAG)
-			{
-				curr_token->stt.tag_name = string_append(curr_token->stt.tag_name, byte_seq[i]);
-			}
-			else if(curr_token->type == TOKEN_END_TAG)
-			{
-				curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, byte_seq[i]);
-			}
-			else
-			{
-				;
-			}
+			curr_token->stt.tag_name = string_n_append(curr_token->stt.tag_name, byte_seq, strlen(byte_seq));
+		}
+		else if(curr_token->type == TOKEN_END_TAG)
+		{
+			curr_token->ett.tag_name = string_n_append(curr_token->ett.tag_name, byte_seq, strlen(byte_seq));
+		}
+		else
+		{
+			;
 		}
 	}
 	else
@@ -2003,10 +2038,12 @@ void script_data_escaped_state_s22(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		//return replacement_for_null_char();
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
 		len = strlen(byte_seq);
@@ -2045,10 +2082,11 @@ void script_data_escaped_dash_state_s23(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
-		//return replacement_for_null_char();
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 
@@ -2096,10 +2134,11 @@ void script_data_escaped_dash_dash_state_s24(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
-		//return replacement_for_null_char();
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 
@@ -2466,10 +2505,11 @@ void script_data_double_escaped_state_s29(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
-
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
 		len = strlen(byte_seq);
@@ -2511,10 +2551,11 @@ void script_data_double_escaped_dash_state_s30(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
-	
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 
@@ -2564,10 +2605,11 @@ void script_data_double_escaped_dash_dash_state_s31(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
-		
 		unsigned char byte_seq[5];
 		int i, len;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 
@@ -2708,23 +2750,18 @@ void before_attribute_name_state_s34(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		//add the attribute only if the current token is a start tag token
 		if(curr_token->type == TOKEN_START_TAG)
 		{
 			unsigned char byte_seq[5];
-			int len, i;
 
 			utf8_byte_sequence(0xFFFD, byte_seq);
-			len = strlen(byte_seq);
 
-			curr_attr_name = NULL;
-			for(i = 0; i < len; i++)
-			{
-				curr_attr_name = string_append(curr_attr_name, byte_seq[i]);
-			}
-
+			curr_attr_name = string_n_append(NULL, byte_seq, strlen(byte_seq));
 			curr_attr_value = string_append(NULL, '\0');
+
 			current_state = ATTRIBUTE_NAME_STATE;
 			//if it ever gets to the ATTRIBUTE_NAME_STATE, the current token
 			//must be a start tag token.
@@ -2733,6 +2770,7 @@ void before_attribute_name_state_s34(unsigned char *ch)
 	else if((c == QUOTATION_MARK) || (c == APOSTROPHE) || (c == LESS_THAN_SIGN) || (c == EQUALS_SIGN))
 	{
 		//parse error
+		parse_error(BAD_CHARACTER_FOR_ATTRIBUTE_NAME, line_number);
 
 		//add the attribute only if the current token is a start tag token
 		if(curr_token->type == TOKEN_START_TAG)
@@ -2818,21 +2856,21 @@ void attribute_name_state_s35(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			curr_attr_name = string_append(curr_attr_name, byte_seq[i]);
-		}
+		curr_attr_name = string_n_append(curr_attr_name, byte_seq, strlen(byte_seq));
+		
 	}
 	else if((c == QUOTATION_MARK) || (c == APOSTROPHE) || (c == LESS_THAN_SIGN))
 	{
 		//parse error
+		parse_error(BAD_CHARACTER_FOR_ATTRIBUTE_NAME, line_number);
+
 		curr_attr_name = string_append(curr_attr_name, c);
 	}
 	else
@@ -2923,13 +2961,10 @@ void after_attribute_name_state_s36(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
@@ -2946,10 +2981,8 @@ void after_attribute_name_state_s36(unsigned char *ch)
 		curr_attr_value = NULL;
 
 		//start a new attribute:
-		for(i = 0; i < len; i++)
-		{
-			curr_attr_name = string_append(curr_attr_name, byte_seq[i]);
-		}
+		utf8_byte_sequence(0xFFFD, byte_seq);
+		curr_attr_name = string_n_append(NULL, byte_seq, strlen(byte_seq));
 		curr_attr_value = string_append(NULL, '\0');
 
 		current_state = ATTRIBUTE_NAME_STATE;
@@ -2957,6 +2990,7 @@ void after_attribute_name_state_s36(unsigned char *ch)
 	else if((c == QUOTATION_MARK) || (c == APOSTROPHE) || (c == LESS_THAN_SIGN))
 	{
 		//parse error
+		parse_error(BAD_CHARACTER_FOR_ATTRIBUTE_NAME, line_number);
 
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
@@ -3029,8 +3063,10 @@ void before_attribute_value_state_s37(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
+
+		//parse_error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		//Append a U+FFFD REPLACEMENT CHARACTER to the current attribute's value.
 		utf8_byte_sequence(0xFFFD, byte_seq);
@@ -3041,6 +3077,8 @@ void before_attribute_value_state_s37(unsigned char *ch)
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_ATTRIBUTE_VALUE, line_number);
+
 		current_state = DATA_STATE;
 
 		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
@@ -3084,6 +3122,7 @@ void before_attribute_value_state_s37(unsigned char *ch)
 	else if((c == LESS_THAN_SIGN) || (c == EQUALS_SIGN) || (c == GRAVE_ACCENT))
 	{
 		//parse error
+		parse_error(BAD_CHARACTER_FOR_ATTRIBUTE_VALUE, line_number);
 		//curr_attr_value = string_append(curr_attr_value, c);
 
 		//instead of appending current char to the curr_attr_value,
@@ -3128,8 +3167,9 @@ void attribute_value_double_quoted_state_s38(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		append_null_replacement_for_attribute_value();
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
+		append_null_replacement_for_attribute_value();
 	}
 	else
 	{
@@ -3170,8 +3210,9 @@ void attribute_value_single_quoted_state_s39(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
-		append_null_replacement_for_attribute_value();
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
+		append_null_replacement_for_attribute_value();
 	}
 	else
 	{
@@ -3276,6 +3317,8 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
 		append_null_replacement_for_attribute_value();
 
 	}
@@ -3283,6 +3326,8 @@ void attribute_value_unquoted_state_s40(unsigned char *ch)
 				|| (c == EQUALS_SIGN) || (c == GRAVE_ACCENT))
 	{	
 		//parse error
+		parse_error(BAD_CHARACTER_FOR_ATTRIBUTE_VALUE, line_number);
+
 		//curr_attr_value = string_append(curr_attr_value, c);
 
 		//instead of appending current char to the curr_attr_value,
@@ -3470,6 +3515,7 @@ void after_attribute_value_quoted_state_s42(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_ATTRIBUTE_VALUE, line_number);
 
 		//copy attr_value_chunk from file buffer and append it to curr_attr_value:
 		if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
@@ -3547,6 +3593,8 @@ void self_closing_start_tag_state_s43(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(UNEXPECTED_SOLIDUS, line_number);
+
 		if(curr_token->type == TOKEN_START_TAG)
 		{
 
@@ -3688,6 +3736,8 @@ void markup_declaration_open_state_s45(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_COMMENT, line_number);
+
 		current_state = BOGUS_COMMENT_STATE;	
 	}
 
@@ -3705,22 +3755,22 @@ void comment_start_state_s46(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->cmt.comment = string_n_append(curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
-		}
 		current_state = COMMENT_STATE;
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(INVALID_COMMENT, line_number);
+
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
@@ -3748,25 +3798,24 @@ void comment_start_dash_state_s47(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
-		
+	
+		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
-		{
-			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
-		}
+		curr_token->cmt.comment = string_n_append(curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 		
 		current_state = COMMENT_STATE;
 	}
 	else if( c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(INVALID_COMMENT, line_number);
+
 		current_state = DATA_STATE;
 
 		process_token(curr_token);
@@ -3796,17 +3845,15 @@ void comment_state_s48(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->cmt.comment = string_n_append(curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
-		}
 	}
 	else
 	{
@@ -3827,19 +3874,16 @@ void comment_end_dash_state_s49(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		
+		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
-		{
-			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
-		}
+		curr_token->cmt.comment = string_n_append(curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 		
 		current_state = COMMENT_STATE;
 	}
@@ -3869,37 +3913,40 @@ void comment_end_state_s50(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		
+		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
-		{
-			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
-		}
+		curr_token->cmt.comment = string_n_append(curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 		
 		current_state = COMMENT_STATE;
 	}
 	else if( c == EXCLAMATION_MARK)
 	{
 		//parse error
+		parse_error(INVALID_COMMENT, line_number);
+
 		current_state = COMMENT_END_BANG_STATE;
 	}
 	else if( c == HYPHEN_MINUS)
 	{
 		//parse error
+		parse_error(INVALID_COMMENT, line_number);
+
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		
 	}
 	else
 	{
 		//parse error
+		parse_error(INVALID_COMMENT, line_number);
+
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, c);
@@ -3933,21 +3980,18 @@ void comment_end_bang_state_s51(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, HYPHEN_MINUS);
 		curr_token->cmt.comment = string_append(curr_token->cmt.comment, EXCLAMATION_MARK);
 		
+		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
-		{
-			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
-		}
+		curr_token->cmt.comment = string_n_append(curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 		
 		current_state = COMMENT_STATE;
 	}
@@ -3978,6 +4022,8 @@ void doctype_state_s52(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(INVALID_DOCTYPE, line_number);
+
 		current_state = BEFORE_DOCTYPE_NAME_STATE;
 		character_consumption = RECONSUME;
 	}
@@ -4005,25 +4051,24 @@ void before_doctype_name_state_s53(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		curr_token = create_doctype_token('\0');
 
+		//append replacement character U+FFFD to DOCTYPE name
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
-		{
-			curr_token->dt.doctype_name = string_append(curr_token->dt.doctype_name, byte_seq[i]);
-		}
+		curr_token->dt.doctype_name = string_n_append(curr_token->dt.doctype_name, byte_seq, strlen(byte_seq));
 
 		current_state = DOCTYPE_NAME_STATE;
 	}
 	else if( c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(INVALID_DOCTYPE, line_number);
+
 		curr_token = create_doctype_token('\0');
 		curr_token->dt.force_quirks_flag = ON;
 
@@ -4071,17 +4116,15 @@ void doctype_name_state_s54(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		//append replacement character U+FFFD to DOCTYPE name
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->dt.doctype_name = string_n_append(curr_token->dt.doctype_name, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->dt.doctype_name = string_append(curr_token->dt.doctype_name, byte_seq[i]);
-		}
 	}
 	else
 	{
@@ -4137,6 +4180,8 @@ void after_doctype_name_state_s55(unsigned char *ch)
 		else
 		{
 			//parse error
+			parse_error(BOGUS_DOCTYPE, line_number);
+
 			curr_token->dt.force_quirks_flag = ON;
 			current_state = BOGUS_DOCTYPE_STATE;
 		}
@@ -4157,18 +4202,24 @@ void after_doctype_public_keyword_state_s56(unsigned char *ch)
 	else if(c == QUOTATION_MARK)
 	{
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE, line_number);
+
 		curr_token->dt.doctype_public_identifier = string_append(NULL, '\0');
 		current_state = DOCTYPE_PUBLIC_IDENTIFIER_DOUBLE_QUOTED_STATE;
 	}
 	else if(c == APOSTROPHE)
 	{
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE, line_number);
+
 		curr_token->dt.doctype_public_identifier = string_append(NULL, '\0');
 		current_state = DOCTYPE_PUBLIC_IDENTIFIER_SINGLE_QUOTED_STATE;
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = DATA_STATE;
 
@@ -4210,6 +4261,8 @@ void before_doctype_public_identifier_state_s57(unsigned char *ch)
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 
 		current_state = DATA_STATE;
@@ -4222,6 +4275,8 @@ void before_doctype_public_identifier_state_s57(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = BOGUS_DOCTYPE_STATE;
 	}
@@ -4240,21 +4295,20 @@ void doctype_public_identifier_double_quoted_state_s58(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
+
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->dt.doctype_public_identifier = string_n_append(curr_token->dt.doctype_public_identifier, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->dt.doctype_public_identifier = string_append(curr_token->dt.doctype_public_identifier, byte_seq[i]);
-		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 
 		current_state = DATA_STATE;
@@ -4283,21 +4337,21 @@ void doctype_public_identifier_single_quoted_state_s59(unsigned char *ch)
 	}
 	else if( c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		//append the replacement character U+FFFD to the public identifier.
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->dt.doctype_public_identifier = string_n_append(curr_token->dt.doctype_public_identifier, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->dt.doctype_public_identifier = string_append(curr_token->dt.doctype_public_identifier, byte_seq[i]);
-		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 
 		current_state = DATA_STATE;
@@ -4337,18 +4391,24 @@ void after_doctype_public_identifier_state_s60(unsigned char *ch)
 	else if(c == QUOTATION_MARK)
 	{	
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_PUBLIC_IDENTIFIER, line_number);
+
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, '\0');
 		current_state = DOCTYPE_SYSTEM_IDENTIFIER_DOUBLE_QUOTED_STATE;
 	}
 	else if(c == APOSTROPHE)
 	{	
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_PUBLIC_IDENTIFIER, line_number);
+
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, '\0');
 		current_state = DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED_STATE;
 	}
 	else
 	{
 		//parse error
+		parse_error(BOGUS_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = BOGUS_DOCTYPE_STATE;
 	}
@@ -4388,6 +4448,8 @@ void between_doctype_public_and_system_identifiers_state_s61(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = BOGUS_DOCTYPE_STATE;
 	}
@@ -4408,18 +4470,24 @@ void after_doctype_system_keyword_state_s62(unsigned char *ch)
 	else if(c == QUOTATION_MARK)
 	{	
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE, line_number);
+
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, '\0');
 		current_state = DOCTYPE_SYSTEM_IDENTIFIER_DOUBLE_QUOTED_STATE;
 	}
 	else if(c == APOSTROPHE)
 	{	
 		//parse error
+		parse_error(MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE, line_number);
+
 		curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, '\0');
 		current_state = DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED_STATE;
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = DATA_STATE;
 
@@ -4431,6 +4499,8 @@ void after_doctype_system_keyword_state_s62(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = BOGUS_DOCTYPE_STATE;
 	}
@@ -4461,6 +4531,8 @@ void before_doctype_system_identifier_state_s63(unsigned char *ch)
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = DATA_STATE;
 
@@ -4472,6 +4544,8 @@ void before_doctype_system_identifier_state_s63(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = BOGUS_DOCTYPE_STATE;
 	}
@@ -4490,21 +4564,21 @@ void doctype_system_identifier_double_quoted_state_s64(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		//append the replacement character U+FFFD to the system identifier
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->dt.doctype_system_identifier = string_n_append(curr_token->dt.doctype_system_identifier, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, byte_seq[i]);
-		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = DATA_STATE;
 
@@ -4532,21 +4606,21 @@ void doctype_system_identifier_single_quoted_state_s65(unsigned char *ch)
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		//parse error
 		unsigned char byte_seq[5];
-		int len, i;
 
+		//parse error
+		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		//append the replacement character U+FFFD to the system identifier
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		curr_token->dt.doctype_system_identifier = string_n_append(curr_token->dt.doctype_system_identifier, byte_seq, strlen(byte_seq));
 
-		for(i = 0; i < len; i++)
-		{
-			curr_token->dt.doctype_system_identifier = string_append(curr_token->dt.doctype_system_identifier, byte_seq[i]);
-		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		//parse error
+		parse_error(MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE, line_number);
+
 		curr_token->dt.force_quirks_flag = ON;
 		current_state = DATA_STATE;
 
@@ -4585,6 +4659,8 @@ void after_doctype_system_identifier_state_s66(unsigned char *ch)
 	else
 	{
 		//parse error
+		parse_error(BOGUS_DOCTYPE, line_number);
+
 		current_state = BOGUS_DOCTYPE_STATE;
 	}
 
@@ -4667,6 +4743,7 @@ void cdata_section_state_s68(unsigned char *ch)
 		if(*(chunk_start + i) == NULL_CHARACTER)
 		{
 			//parse error
+			parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 			//copy the chunk up to the NULL char
 			text_buffer = string_n_append(text_buffer, chunk_start, i);
@@ -4706,6 +4783,8 @@ void cdata_section_state_s68(unsigned char *ch)
 		if(*(chunk_start + i) == NULL_CHARACTER)
 		{
 			//parse error
+			parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
 			//append the replacement character
 			text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
 		}
@@ -4847,6 +4926,7 @@ void before_html_mode(const token *tk)
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			//ignore the token
 			break;
 		case TOKEN_START_TAG:
@@ -4894,7 +4974,7 @@ void before_html_mode(const token *tk)
 				else
 				{
 					//parse error, ignore the token
-					;
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 			}
 
@@ -4955,6 +5035,7 @@ void before_head_mode(const token *tk)
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			//ignore the token
 			break;
 		case TOKEN_START_TAG:
@@ -5014,7 +5095,8 @@ void before_head_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 			}
 			break;
@@ -5081,6 +5163,7 @@ void in_head_mode(const token *tk)
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			//ignore the token
 			break;
 		case TOKEN_START_TAG:
@@ -5204,7 +5287,7 @@ void in_head_mode(const token *tk)
 				{
 					//parse error
 					//ignore the token
-					;
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 			}
 
@@ -5242,7 +5325,8 @@ void in_head_noscript_mode(const token *tk)
 				else
 				{
 					//parse error
-					//current_node = current_node->parent; 
+					parse_error(UNEXPECTED_TEXT, line_number);
+
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5259,6 +5343,7 @@ void in_head_noscript_mode(const token *tk)
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			//ignore the token
 			break;
 		case TOKEN_START_TAG:
@@ -5281,12 +5366,14 @@ void in_head_noscript_mode(const token *tk)
 				else if((strcmp(tk->stt.tag_name, "head") == 0) ||
 						(strcmp(tk->stt.tag_name, "noscript") == 0))
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_START_TAG, line_number);
 				}
 				else
 				{
 					//parse error
-					//current_node = current_node->parent; 
+					parse_error(UNEXPECTED_START_TAG, line_number);
+
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5299,15 +5386,13 @@ void in_head_noscript_mode(const token *tk)
 			{
 				if(strcmp(tk->ett.tag_name, "noscript") == 0)
 				{
-					//current_node = current_node->parent; 
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
 					current_mode = IN_HEAD;
 				}
-				if(strcmp(tk->ett.tag_name, "br") == 0)
+				else if(strcmp(tk->ett.tag_name, "br") == 0)
 				{
-					//current_node = current_node->parent; 
 					open_element_stack_pop(&o_e_stack); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5316,7 +5401,8 @@ void in_head_noscript_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 			}
 			break;
@@ -5377,6 +5463,7 @@ void after_head_mode(const token *tk)
 			break;
 		case TOKEN_DOCTYPE:
 			//parse error
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			//ignore the token
 			break;
 		case TOKEN_START_TAG:
@@ -5393,7 +5480,7 @@ void after_head_mode(const token *tk)
 					//Switch the insertion mode to "in body ".
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					//current_node = (node *)e; 
+
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5403,7 +5490,7 @@ void after_head_mode(const token *tk)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 					add_child_node(current_node, (node *)e);
-					//current_node = (node *)e; 
+ 
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 					
@@ -5416,6 +5503,7 @@ void after_head_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "meta") == 0))
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 					//Push the node pointed to by the head element pointer onto the stack of open elements .
 					//Process the token using the rules for the "in head " insertion mode .
 					//Remove the node pointed to by the head element pointer from the stack of open elements .
@@ -5437,6 +5525,7 @@ void after_head_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "title") == 0))
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 					//Push the node pointed to by the head element pointer onto the stack of open elements .
 					//Process the token using the rules for the "in head " insertion mode .
 					//Remove the node pointed to by the head element pointer from the stack of open elements 
@@ -5454,6 +5543,7 @@ void after_head_mode(const token *tk)
 				else if(strcmp(tk->stt.tag_name, "head") == 0)
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 					//ignore the token
 				}
 				else
@@ -5463,7 +5553,7 @@ void after_head_mode(const token *tk)
 
 					element_node *e = create_element_node("body", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					//current_node = (node *)e; 
+
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5484,7 +5574,7 @@ void after_head_mode(const token *tk)
 
 					element_node *e = create_element_node("body", NULL, HTML);
 					add_child_node(current_node, (node *)e);
-					//current_node = (node *)e; 
+
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5495,7 +5585,7 @@ void after_head_mode(const token *tk)
 				{
 					//parse error
 					//ignore the token
-					;
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 			}
 
@@ -5529,6 +5619,7 @@ void in_body_mode(const token *tk)
 				if(tk->cht.ch == NULL_CHARACTER)
 				{
 					//parse error, ignore the token
+					parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 					//copy text_chunk from file buffer to text_buffer:
 					if((text_chunk != NULL) && (text_char_count > 0))
@@ -5661,6 +5752,8 @@ void in_body_mode(const token *tk)
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
+
 			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
@@ -5708,12 +5801,16 @@ void in_body_mode(const token *tk)
 				}
 
 				if(strcmp(tk->stt.tag_name, "html") == 0)
-				{					
+				{	
+					element_node *html_node;
+
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
+
 					//For each attribute on the token, check to see if the attribute 
 					//is already present on the top element of the stack of open elements . 
 					//If it is not, add the attribute and its corresponding value to that element
-					element_node *html_node = get_node_by_name(o_e_stack, "html");
+					html_node = get_node_by_name(o_e_stack, "html");
 
 					if(html_node != NULL)
 					{
@@ -5752,12 +5849,14 @@ void in_body_mode(const token *tk)
 				}
 				else if(strcmp(tk->stt.tag_name, "body") == 0)
 				{
-					//parse error
 					//set the frameset-ok flag to "not ok"
 					//for each attribute on the token, check to see if the attribute is already present
 					//on the body element if it is not, add the attribute and its corresponding value to that element.
 					element_node *body_node = get_node_by_name(o_e_stack, "body");
 					attribute_list *curr_token_attrs = tk->stt.attributes;
+
+					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 
 					if(body_node != NULL)
 					{
@@ -5780,10 +5879,10 @@ void in_body_mode(const token *tk)
 				else if(strcmp(tk->stt.tag_name, "frameset") == 0)
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 					//implementation pending
 					//Insert an HTML element for the token.
 					//Switch the insertion mode to "in frameset"
-					;
 				}
 				else if((strcmp(tk->stt.tag_name, "address") == 0) ||
 						(strcmp(tk->stt.tag_name, "article") == 0) ||
@@ -5863,6 +5962,8 @@ void in_body_mode(const token *tk)
 					   (strcmp(current_node->name, "h6") == 0))
 					{
 						//parse error;
+						parse_error(UNEXPECTED_START_TAG, line_number);
+
 						open_element_stack_pop(&o_e_stack); 
 						current_node = open_element_stack_top(o_e_stack);
 					}
@@ -5915,7 +6016,9 @@ void in_body_mode(const token *tk)
 				{
 					if(form_element_ptr != NULL)
 					{
-						; //parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_START_TAG, line_number);
+
 					}
 					else
 					{
@@ -6084,6 +6187,8 @@ void in_body_mode(const token *tk)
 					if(has_element_in_scope(o_e_stack, "button", &match_node) == 1)
 					{
 						//parse error
+						parse_error(UNEXPECTED_START_TAG, line_number);
+
 						pop_elements_up_to(&o_e_stack, "button");
 						current_node = open_element_stack_top(o_e_stack);
 
@@ -6397,6 +6502,8 @@ void in_body_mode(const token *tk)
 				else if(strcmp(tk->stt.tag_name, "isindex") == 0)
 				{
 					//parse error
+					parse_error(DEPRECATED_TAG, line_number);
+
 					if(form_element_ptr != NULL)
 					{
 						;	//ignore the token
@@ -6748,7 +6855,8 @@ void in_body_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "thead") == 0) ||
 						(strcmp(tk->stt.tag_name, "tr") == 0))
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_START_TAG, line_number);
 				}
 				else
 				{
@@ -6811,6 +6919,7 @@ void in_body_mode(const token *tk)
 					if(has_element_in_scope(o_e_stack, "body", &match_node) == 0)
 					{
 						//parser error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -6825,6 +6934,7 @@ void in_body_mode(const token *tk)
 					if(has_element_in_scope(o_e_stack, "body", &match_node) == 0)
 					{
 						//parser error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -6843,9 +6953,12 @@ void in_body_mode(const token *tk)
 					}
 					else
 					{
-						//parse error, act as if a start tag with the tag name "p" had been seen, 
+						element_node *e;
+						//parse error, act as if a start tag with the tag name "p" had been seen,
 						//then reprocess the current token.
-						element_node *e = create_element_node("p", NULL, HTML);
+						parse_error(UNEXPECTED_END_TAG, line_number);
+
+						e = create_element_node("p", NULL, HTML);
 						if(apply_foster_parenting == 1)
 						{
 							add_child_to_foster_parent(o_e_stack, (node *)e);
@@ -6895,7 +7008,8 @@ void in_body_mode(const token *tk)
 					}
 					else
 					{
-						; 	//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 
 				}
@@ -6911,7 +7025,8 @@ void in_body_mode(const token *tk)
 					if((form_element_node == NULL) ||
 						(has_element_in_scope(o_e_stack, "form", &match_node) == 0))
 					{
-						; 	//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -6936,7 +7051,8 @@ void in_body_mode(const token *tk)
 					   (has_element_in_scope(o_e_stack, "h5", &match_node) == 0) &&
 					   (has_element_in_scope(o_e_stack, "h6", &match_node) == 0))
 					{
-						;	//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -6965,7 +7081,7 @@ void in_body_mode(const token *tk)
 							}
 						}
 						
-						//o_e_stack will not be NULL in the last step, as a header element must be found, 
+						//o_e_stack will not be NULL in the last step, as a header element must be found(one of them must exist), 
 						//and loop will exit after it is popped.
 						current_node = open_element_stack_top(o_e_stack);
 					}
@@ -6981,7 +7097,8 @@ void in_body_mode(const token *tk)
 					}
 					else
 					{
-						; 	//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 				}
 				else if((strcmp(tk->ett.tag_name, "dd") == 0) ||
@@ -6996,7 +7113,8 @@ void in_body_mode(const token *tk)
 					}
 					else
 					{
-						; 	//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 
 				}
@@ -7038,15 +7156,17 @@ void in_body_mode(const token *tk)
 					}
 					else
 					{
-						; 	//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 
 				}
 				else if(strcmp(tk->ett.tag_name, "br") == 0)
 				{
+					element_node *e;
 					//parse error . Act as if a start tag token with the tag name "br" had been seen. 
 					//ignore the end tag token.
-					element_node *e;
+					parse_error(INVALID_END_TAG, line_number);
 					
 					//Reconstruct the active formatting elements, if any.
 					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
@@ -7076,13 +7196,23 @@ void in_body_mode(const token *tk)
 
 						if(strcmp(temp_element->name, tk->ett.tag_name) == 0)
 						{
+							current_node = generate_implied_end_tags(&o_e_stack);
+
+							if(strcmp(current_node->name, tk->ett.tag_name) != 0)
+							{
+								//parse error
+								parse_error(UNEXPECTED_END_TAG, line_number);
+							}
+
 							pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
 							current_node = open_element_stack_top(o_e_stack);
 							break;
 						}
 						else if(is_in_special_category(temp_element) == 1)
 						{
-							break;	//parse error, ignore the token
+							//parse error, ignore the token
+							parse_error(UNEXPECTED_END_TAG, line_number);
+							break;
 						}
 						else
 						{
@@ -7101,13 +7231,23 @@ void in_body_mode(const token *tk)
 
 						if(strcmp(temp_element->name, tk->ett.tag_name) == 0)
 						{
+							current_node = generate_implied_end_tags(&o_e_stack);
+
+							if(strcmp(current_node->name, tk->ett.tag_name) != 0)
+							{
+								//parse error
+								parse_error(UNEXPECTED_END_TAG, line_number);
+							}
+
 							pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
 							current_node = open_element_stack_top(o_e_stack);
 							break;
 						}
 						else if(is_in_special_category(temp_element) == 1)
 						{
-							break;	//parse error, ignore the token
+							//parse error, ignore the token
+							parse_error(UNEXPECTED_END_TAG, line_number);
+							break;	
 						}
 						else
 						{
@@ -7222,6 +7362,9 @@ void text_mode(const token *tk)
 			break;
 		case TOKEN_EOF:
 			{
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+
 				open_element_stack_pop(&o_e_stack); 
 				current_node = open_element_stack_top(o_e_stack);
 
@@ -7256,6 +7399,7 @@ void in_table_mode(const token *tk)
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			break;
 		case TOKEN_START_TAG:
 		    {
@@ -7343,10 +7487,12 @@ void in_table_mode(const token *tk)
 				}
 				else if(strcmp(tk->stt.tag_name, "table") == 0)
 				{
+					element_node *match_node;
+
 					//parse error
 					//Act as if an end tag token with the tag name "table" had been seen, then, if that token
 					//wasn't ignored, reprocess the current token.
-					element_node *match_node;
+					parse_error(UNEXPECTED_START_TAG, line_number);					
 
 					if(has_element_in_table_scope(o_e_stack, "table", &match_node) == 1)
 					{
@@ -7359,7 +7505,7 @@ void in_table_mode(const token *tk)
 					}
 					else
 					{
-						//parse error, ignore the token
+						//ignore the token
 					}	
 				}
 				else if((strcmp(tk->stt.tag_name, "style") == 0) ||
@@ -7380,7 +7526,9 @@ void in_table_mode(const token *tk)
 				}
 				else if(strcmp(tk->stt.tag_name, "form") == 0)
 				{
-					//Parse error .
+					//Parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
+
 					//If the form element pointer is not null, ignore the token.
 					//Otherwise:
 					//Insert an HTML element for the token, and set the form element pointer to point to the element created.
@@ -7432,6 +7580,7 @@ void in_table_mode(const token *tk)
 					else
 					{
 						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 
 				}
@@ -7448,6 +7597,7 @@ void in_table_mode(const token *tk)
 						(strcmp(tk->ett.tag_name, "tr") == 0))
 				{
 					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 				else
 				{
@@ -7612,10 +7762,13 @@ void in_caption_mode(const token *tk)
 		(strcmp(tk->stt.tag_name, "thead") == 0) ||
 		(strcmp(tk->stt.tag_name, "tr") == 0)))
 	{
+		element_node *match_node;
+
 		//parse error
+		parse_error(UNEXPECTED_START_TAG, line_number);
+
 		//Act as if an end tag with the tag name "caption" had been seen, then, 
 		//if that token wasn't ignored, reprocess the current token.
-		element_node *match_node;
 		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
 
@@ -7649,7 +7802,7 @@ void in_caption_mode(const token *tk)
 		}
 		else
 		{
-			//parse error, ignore the token
+			//ignore the token
 
 			//tag token is ignored, there may be more text after the ignored token
 			//copy text_chunk from file buffer to text_buffer:
@@ -7699,6 +7852,7 @@ void in_caption_mode(const token *tk)
 		else
 		{
 			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 
 			//tag token is ignored, there may be more text after the ignored token
 			//copy text_chunk from file buffer to text_buffer:
@@ -7715,10 +7869,13 @@ void in_caption_mode(const token *tk)
 	else if((tk->type == TOKEN_END_TAG) &&
 		(strcmp(tk->ett.tag_name, "table") == 0))
 	{
+		element_node *match_node;
+
 		//parse error
+		parse_error(UNEXPECTED_END_TAG, line_number);
+
 		//Act as if an end tag with the tag name "caption" had been seen, then, 
 		//if that token wasn't ignored, reprocess the current token.
-		element_node *match_node;
 
 		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
@@ -7752,7 +7909,7 @@ void in_caption_mode(const token *tk)
 		}
 		else
 		{
-			//parse error, ignore the token
+			//ignore the token
 
 			//tag token is ignored, there may be more text after the ignored token
 			//copy text_chunk from file buffer to text_buffer:
@@ -7777,6 +7934,7 @@ void in_caption_mode(const token *tk)
 				(strcmp(tk->ett.tag_name, "tr") == 0)))
 	{
 		//parse error, ignore the token
+		parse_error(UNEXPECTED_END_TAG, line_number);
 
 		//tag token is ignored, there may be more text after the ignored token
 		//copy text_chunk from file buffer to text_buffer:
@@ -7833,7 +7991,7 @@ void in_column_group_mode(const token *tk)
 					//and then, if that token wasn't ignored, reprocess the current token.
 					if(strcmp(current_node->name, "html") == 0)
 					{
-						;//parse error, ignore the token
+						;//ignore the imagined end tag token "colgroup"
 					}
 					else
 					{
@@ -7856,6 +8014,8 @@ void in_column_group_mode(const token *tk)
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
+
 			break;
 		case TOKEN_START_TAG:
 		    {
@@ -7880,7 +8040,7 @@ void in_column_group_mode(const token *tk)
 
 					if(strcmp(current_node->name, "html") == 0)
 					{
-						;//parse error, ignore the token
+						;//ignore the imagined end tag token "colgroup"
 					}
 					else
 					{
@@ -7899,7 +8059,8 @@ void in_column_group_mode(const token *tk)
 				{
 					if(strcmp(current_node->name, "html") == 0)
 					{
-						;//parse error, ignore the token
+						//parse error, ignore the token (fragment case)
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -7911,7 +8072,8 @@ void in_column_group_mode(const token *tk)
 				}
 				else if(strcmp(tk->ett.tag_name, "col") == 0)
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 				else
 				{
@@ -7919,7 +8081,7 @@ void in_column_group_mode(const token *tk)
 					//and then, if that token wasn't ignored, reprocess the current token.
 					if(strcmp(current_node->name, "html") == 0)
 					{
-						;//parse error, ignore the token
+						;//ignore the imagined end tag token "colgroup"
 					}
 					else
 					{
@@ -7938,7 +8100,7 @@ void in_column_group_mode(const token *tk)
 				//and then, if that token wasn't ignored, reprocess the current token.
 				if(strcmp(current_node->name, "html") == 0)
 				{
-					;//parse error, ignore the token
+					;//ignore the imagined end tag token "colgroup"
 				}
 				else
 				{
@@ -7975,10 +8137,11 @@ void in_table_body_mode(const token *tk)
 			((strcmp(tk->stt.tag_name, "th") == 0) ||
 			 (strcmp(tk->stt.tag_name, "td") == 0)))
 	{
-		//parse error
-		//Act as if a start tag with the tag name "tr" had been seen, then reprocess the current token.
 		element_node *e;
-	
+		//parse error
+		parse_error(UNEXPECTED_START_TAG, line_number);
+
+		//Act as if a start tag with the tag name "tr" had been seen, then reprocess the current token.
 		current_node = back_to_table_body_context(&o_e_stack);
 
 		e = create_element_node("tr", NULL, HTML);
@@ -8002,7 +8165,8 @@ void in_table_body_mode(const token *tk)
 		   (has_element_in_table_scope(o_e_stack, "thead", &match_node) == 0) &&
 		   (has_element_in_table_scope(o_e_stack, "tfoot", &match_node) == 0))
 		{
-			;//parse error, ignore the token
+			//parse error, ignore the token
+			parse_error(UNEXPECTED_START_TAG, line_number);
 		}
 		else
 		{
@@ -8027,7 +8191,8 @@ void in_table_body_mode(const token *tk)
 		   (has_element_in_table_scope(o_e_stack, "thead", &match_node) == 0) &&
 		   (has_element_in_table_scope(o_e_stack, "tfoot", &match_node) == 0))
 		{
-			;//parse error, ignore the token
+			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 		}
 		else
 		{
@@ -8064,6 +8229,7 @@ void in_table_body_mode(const token *tk)
 		else
 		{
 			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8077,7 +8243,8 @@ void in_table_body_mode(const token *tk)
 			  (strcmp(tk->ett.tag_name, "tr") == 0)))
 
 	{
-		;//parse error, ignore the token
+		//parse error, ignore the token
+		parse_error(UNEXPECTED_END_TAG, line_number);
 	}
 	else
 	{
@@ -8131,7 +8298,8 @@ void in_row_mode(const token *tk)
 		}
 		else
 		{
-			;//parse error, ignore the token
+			//parse error, ignore the token
+			parse_error(UNEXPECTED_START_TAG, line_number);
 		}
 		
 	}
@@ -8151,7 +8319,8 @@ void in_row_mode(const token *tk)
 		}
 		else
 		{
-			;//parse error, ignore the token
+			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8172,7 +8341,8 @@ void in_row_mode(const token *tk)
 		}
 		else
 		{
-			;//parse error, ignore the token
+			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8197,12 +8367,13 @@ void in_row_mode(const token *tk)
 			}
 			else
 			{
-				;//parse error, ignore the token
+				//ignore the imagined end tag token "tr"
 			}
 		}
 		else
 		{
-			;//parse error, ignore the token
+			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8214,7 +8385,8 @@ void in_row_mode(const token *tk)
 			 (strcmp(tk->ett.tag_name, "td") == 0) ||
 			 (strcmp(tk->ett.tag_name, "th") == 0)))
 	{
-		;//parse error, ignore the token
+		//parse error, ignore the token
+		parse_error(UNEXPECTED_END_TAG, line_number);
 	}
 	else
 	{
@@ -8310,6 +8482,7 @@ void in_cell_mode(const token *tk)
 		else
 		{
 			//parse error, ignore the token.
+			parse_error(UNEXPECTED_START_TAG, line_number);
 
 			//tag token is ignored, there may be more text after the ignored token
 			//copy text_chunk from file buffer to text_buffer:
@@ -8363,6 +8536,7 @@ void in_cell_mode(const token *tk)
 		else
 		{
 			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 
 			//tag token is ignored, there may be more text after the ignored token
 			//copy text_chunk from file buffer to text_buffer:
@@ -8382,6 +8556,7 @@ void in_cell_mode(const token *tk)
 			 (strcmp(tk->ett.tag_name, "html") == 0)))
 	{
 		//parse error, ignore the token
+		parse_error(UNEXPECTED_END_TAG, line_number);
 
 		//tag token is ignored, there may be more text after the ignored token
 		//copy text_chunk from file buffer to text_buffer:
@@ -8445,6 +8620,7 @@ void in_cell_mode(const token *tk)
 		else
 		{
 			//parse error, ignore the token
+			parse_error(UNEXPECTED_END_TAG, line_number);
 
 			//tag token is ignored, there may be more text after the ignored token
 			//copy text_chunk from file buffer to text_buffer:
@@ -8513,6 +8689,8 @@ void in_select_mode(const token *tk)
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
+
 			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
@@ -8599,8 +8777,10 @@ void in_select_mode(const token *tk)
 				}
 				else if(strcmp(tk->stt.tag_name, "select") == 0)
 				{
-					//parse error . Act as if the token had been an end tag with the tag name "select" instead.
 					element_node *match_node;
+					//parse error . Act as if the token had been an end tag with the tag name "select" instead.
+					parse_error(UNEXPECTED_START_TAG, line_number);
+
 					if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 					{
 						pop_elements_up_to(&o_e_stack, "select");
@@ -8611,17 +8791,19 @@ void in_select_mode(const token *tk)
 					}
 					else
 					{
-						;//parse error, ignore the token (fragment case)
+						//ignore the imagined end tag token (fragment case)
 					}
 				}
 				else if((strcmp(tk->stt.tag_name, "input") == 0) ||
 					    (strcmp(tk->stt.tag_name, "keygen") == 0) ||
 						(strcmp(tk->stt.tag_name, "textarea") == 0))
 				{
-					//parse error.
+					element_node *match_node;
+					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
+
 					//If the stack of open elementsdoes not have a select element in select scope, ignore the token.
 					//Otherwise, act as if an end tag with the tag name "select" had been seen, and reprocess the token.
-					element_node *match_node;
 					if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 					{
 						pop_elements_up_to(&o_e_stack, "select");
@@ -8633,7 +8815,7 @@ void in_select_mode(const token *tk)
 					}
 					else
 					{
-						;//parse error, ignore the token (fragment case)
+						//ignore the imagined end tag token (fragment case)
 					}
 				}
 				else if(strcmp(tk->stt.tag_name, "script") == 0)
@@ -8644,6 +8826,7 @@ void in_select_mode(const token *tk)
 				else
 				{
 					//parse error, ignore the token
+					parse_error(UNEXPECTED_START_TAG, line_number);
 
 					//assign the text_data back to text_buffer and set text_data to empty string.
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -8698,6 +8881,7 @@ void in_select_mode(const token *tk)
 					else
 					{
 						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 
 						//assign the text_data back to text_buffer and set text_data to empty string.
 						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -8719,6 +8903,7 @@ void in_select_mode(const token *tk)
 					else
 					{
 						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 
 						//assign the text_data back to text_buffer and set text_data to empty string.
 						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -8744,12 +8929,14 @@ void in_select_mode(const token *tk)
 					}
 					else
 					{
-						;//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 				}
 				else
 				{
 					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
 
 					//assign the text_data back to text_buffer and set text_data to empty string.
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -8760,6 +8947,16 @@ void in_select_mode(const token *tk)
 						t->text_data = string_append(NULL, '\0');
 					}
 
+				}
+			}
+			break;
+		case TOKEN_EOF:
+			//stop parsing;
+			{
+				if(strcmp(current_node->name, "html") != 0)
+				{
+					//parse error
+					parse_error(UNEXPECTED_END_OF_FILE, line_number);
 				}
 			}
 			break;
@@ -8784,21 +8981,21 @@ void in_select_in_table_mode(const token *tk)
 		(strcmp(tk->stt.tag_name, "td") == 0) ||
 		(strcmp(tk->stt.tag_name, "th") == 0)))
 	{
-		//parse error . Act as if an end tag with the tag name "select" had been seen, and reprocess the token.
 		element_node *match_node;
+
+		//parse error . Act as if an end tag with the tag name "select" had been seen, and reprocess the token.
+		parse_error(UNEXPECTED_START_TAG, line_number);
+
 		if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 		{
 			pop_elements_up_to(&o_e_stack, "select");
 			current_node = open_element_stack_top(o_e_stack);
+		}
 
-			//Reset the insertion mode appropriately.
-			current_mode = reset_insertion_mode(o_e_stack);
-			token_process = REPROCESS;
-		}
-		else
-		{
-			;//parse error, ignore the token
-		}
+		//Reset the insertion mode appropriately.
+		current_mode = reset_insertion_mode(o_e_stack);
+		token_process = REPROCESS;
+
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
 			((strcmp(tk->ett.tag_name, "caption") == 0) ||
@@ -8810,23 +9007,23 @@ void in_select_in_table_mode(const token *tk)
 			 (strcmp(tk->ett.tag_name, "td") == 0) ||
 			 (strcmp(tk->ett.tag_name, "th") == 0)))
 	{
-		//parse error
 		element_node *match_node;
+
+		//parse error
+		parse_error(UNEXPECTED_END_TAG, line_number);
+
 		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
 			if(has_element_in_select_scope(o_e_stack, "select", &match_node) == 1) 
 			{
 				pop_elements_up_to(&o_e_stack, "select");
 				current_node = open_element_stack_top(o_e_stack);
+			}
 
-				//Reset the insertion mode appropriately.
-				current_mode = reset_insertion_mode(o_e_stack);
-				token_process = REPROCESS;
-			}
-			else
-			{
-				;//ignore the token
-			}
+			//Reset the insertion mode appropriately.
+			current_mode = reset_insertion_mode(o_e_stack);
+			token_process = REPROCESS;
+			
 		}
 		else
 		{
@@ -8868,6 +9065,8 @@ void after_body_mode(const token *tk)
 				else
 				{
 					//parse error
+					parse_error(UNEXPECTED_TEXT, line_number);
+
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -8915,6 +9114,8 @@ void after_body_mode(const token *tk)
 			//parse error
 			//ignore the token
 			{
+				parse_error(UNEXPECTED_DOCTYPE, line_number);
+
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
 					text_node *t = (text_node *)current_node->last_child;
@@ -8966,6 +9167,7 @@ void after_body_mode(const token *tk)
 				else
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -9005,6 +9207,7 @@ void after_body_mode(const token *tk)
 				else
 				{
 					//parse error
+					parse_error(UNEXPECTED_END_TAG, line_number);
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -9048,6 +9251,7 @@ void in_frameset_mode(const token *tk)
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			break;
 		case TOKEN_START_TAG:
 		    {
@@ -9078,7 +9282,8 @@ void in_frameset_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_START_TAG, line_number);
 				}
 			}
 			break;
@@ -9088,7 +9293,8 @@ void in_frameset_mode(const token *tk)
 				{
 					if(strcmp(current_node->name, "html") == 0)
 					{
-						;//parse error, ignore the token
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -9104,7 +9310,18 @@ void in_frameset_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
+				}
+			}
+			break;
+		case TOKEN_EOF:
+			//stop parsing
+			{
+				if(strcmp(current_node->name, "html") != 0)
+				{
+					//parse error
+					parse_error(UNEXPECTED_END_OF_FILE, line_number);
 				}
 			}
 			break;
@@ -9124,7 +9341,8 @@ void after_frameset_mode(const token *tk)
 	{
 		case TOKEN_CHARACTER:
 			{
-				;//parse error, ignore the token
+				//parse error, ignore the token
+				parse_error(UNEXPECTED_TEXT, line_number);
 			}
 			break;
 		case TOKEN_COMMENT:
@@ -9136,6 +9354,7 @@ void after_frameset_mode(const token *tk)
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
+			parse_error(UNEXPECTED_DOCTYPE, line_number);
 			break;
 		case TOKEN_START_TAG:
 		    {
@@ -9151,7 +9370,8 @@ void after_frameset_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_START_TAG, line_number);
 				}
 			}
 			break;
@@ -9163,13 +9383,14 @@ void after_frameset_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
 				}
 			}
 			break;
 		default:
 			{
-				;//parse error, ignore the token
+				//parse error, ignore the token
 			}
 			break;
 	}
@@ -9196,6 +9417,7 @@ void after_after_body_mode(const token *tk)
 				else
 				{
 					//parse error
+					parse_error(UNEXPECTED_TEXT, line_number);
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -9287,6 +9509,7 @@ void after_after_body_mode(const token *tk)
 				else
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
@@ -9297,6 +9520,8 @@ void after_after_body_mode(const token *tk)
 			//parse error
 			//Switch the insertion mode to "in body" and reprocess the token.
 			{
+				parse_error(UNEXPECTED_END_TAG, line_number);
+
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
 					text_node *t = (text_node *)current_node->last_child;
@@ -9341,7 +9566,8 @@ void after_after_frameset_mode(const token *tk)
 	{
 		case TOKEN_CHARACTER:
 			{
-				;//parse error, ignore the token
+				//parse error, ignore the token
+				parse_error(UNEXPECTED_TEXT, line_number);
 			}
 			break;
 		case TOKEN_COMMENT:
@@ -9371,13 +9597,15 @@ void after_after_frameset_mode(const token *tk)
 				}
 				else
 				{
-					;//parse error, ignore the token
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_START_TAG, line_number);
 				}
 			}
 			break;
 		case TOKEN_END_TAG:
 			{
-				;//parse error, ignore the token
+				//parse error, ignore the token
+				parse_error(UNEXPECTED_END_TAG, line_number);
 			}
 			break;
 		default:
@@ -9523,6 +9751,8 @@ void parse_token_in_foreign_content(const token *tk)
 					//Parse error. Insert a U+FFFD REPLACEMENT CHARACTER character into the current node.
 					unsigned char byte_seq[5];
 
+					parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
 					utf8_byte_sequence(0xFFFD, byte_seq);
 					
 					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -9614,6 +9844,7 @@ void parse_token_in_foreign_content(const token *tk)
 		case TOKEN_DOCTYPE:
 			{
 				//parse error, ignore the token
+				parse_error(UNEXPECTED_DOCTYPE, line_number);
 
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
@@ -9709,6 +9940,7 @@ void parse_token_in_foreign_content(const token *tk)
 							 (attribute_name_in_list("size", tk->stt.attributes) == 1))))
 				{
 					//parse error
+					parse_error(UNEXPECTED_START_TAG, line_number);
 
 					//Pop an element from the stack of open elements
 					open_element_stack_pop(&o_e_stack);
@@ -10048,8 +10280,104 @@ int is_in_a_script_data_parsing_state(void)
 }
 
 /*--------------------------------------------------------------------------------------*/
-void parse_error(unsigned char *err_msg, unsigned long line_num)
+void parse_error(error_message_type err_msg, unsigned long line_num)
 {
-	printf("Line: %lu  Error: %s\n", line_num, err_msg);
-		
+	printf("Line: %lu  Error: ", line_num);
+
+	if(err_msg == NULL_CHARACTER_IN_TEXT)
+	{
+		printf("NULL_CHARACTER_IN_TEXT\n");
+	}
+	else if(err_msg == UNEXPECTED_END_OF_FILE)
+	{
+		printf("UNEXPECTED_END_OF_FILE\n");
+	}
+	else if(err_msg == BOGUS_COMMENT)
+	{
+		printf("BOGUS_COMMENT\n");
+	}
+	else if(err_msg == UNESCAPED_LESS_THAN)
+	{
+		printf("UNESCAPED_LESS_THAN\n");
+	}
+	else if(err_msg == EMPTY_END_TAG)
+	{
+		printf("EMPTY_END_TAG\n");
+	}
+	else if(err_msg == BAD_CHARACTER_FOR_ATTRIBUTE_NAME)
+	{
+		printf("BAD_CHARACTER_FOR_ATTRIBUTE_NAME\n");
+	}
+	else if(err_msg == MISSING_ATTRIBUTE_VALUE)
+	{
+		printf("MISSING_ATTRIBUTE_VALUE\n");
+	}
+	else if(err_msg == BAD_CHARACTER_FOR_ATTRIBUTE_VALUE)
+	{
+		printf("BAD_CHARACTER_FOR_ATTRIBUTE_VALUE\n");
+	}
+	else if(err_msg == MISSING_SPACE_AFTER_ATTRIBUTE_VALUE)
+	{
+		printf("MISSING_SPACE_AFTER_ATTRIBUTE_VALUE\n");
+	}
+	else if(err_msg == UNEXPECTED_SOLIDUS)
+	{
+		printf("UNEXPECTED_SOLIDUS\n");
+	}
+	else if(err_msg == INVALID_COMMENT)
+	{
+		printf("INVALID_COMMENT\n");
+	}
+	else if(err_msg == INVALID_DOCTYPE)
+	{
+		printf("INVALID_DOCTYPE\n");
+	}
+	else if(err_msg == BOGUS_DOCTYPE)
+	{
+		printf("BOGUS_DOCTYPE\n");
+	}
+	else if(err_msg == MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE)
+	{
+		printf("MISSING_SPACE_AFTER_KEYWORD_IN_DOCTYPE\n");
+	}
+	else if(err_msg == MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE)
+	{
+		printf("MISSING_PUBLIC_IDENTIFIER_IN_DOCTYPE\n");
+	}
+	else if(err_msg == MISSING_SPACE_AFTER_PUBLIC_IDENTIFIER)
+	{
+		printf("MISSING_SPACE_AFTER_PUBLIC_IDENTIFIER\n");
+	}
+	else if(err_msg == MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE)
+	{
+		printf("MISSING_SYSTEM_IDENTIFIER_IN_DOCTYPE\n");
+	}
+	else if(err_msg == UNEXPECTED_TEXT)
+	{
+		printf("UNEXPECTED_TEXT\n");
+	}
+	else if(err_msg == UNEXPECTED_DOCTYPE)
+	{
+		printf("UNEXPECTED_DOCTYPE\n");
+	}
+	else if(err_msg == UNEXPECTED_START_TAG)
+	{
+		printf("UNEXPECTED_START_TAG\n");
+	}
+	else if(err_msg == UNEXPECTED_END_TAG)
+	{
+		printf("UNEXPECTED_END_TAG\n");
+	}
+	else if(err_msg == DEPRECATED_TAG)
+	{
+		printf("DEPRECATED_TAG\n");
+	}
+	else if(err_msg == INVALID_END_TAG)
+	{
+		printf("INVALID_END_TAG\n");
+	}
+	else
+	{
+		;	//unknown error message
+	}
 }
