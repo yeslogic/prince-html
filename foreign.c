@@ -9,10 +9,6 @@
 #include "foreign.h"
 
 
-#ifdef WIN32
-#define strcasecmp stricmp
-#endif
-
 #define NUM_SVG_ATTRIBUTES 62
 #define NUM_SVG_START_TAG_NAMES 36
 

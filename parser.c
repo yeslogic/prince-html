@@ -516,6 +516,7 @@ void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **ro
 	//create a document root element
 	doc_root = create_element_node("DOC", NULL, HTML);
 
+
 	//preprocessing input buffer, make LF the only character representing newlines.
 	preprocess_input(file_buffer, buffer_length, &buffer_length);
 
@@ -7522,7 +7523,55 @@ void in_table_mode(const token *tk)
 					//Parse error .
 					//Insert an HTML element for the token.
 					//Pop that input element off the stack of open elements .
-					; //implementation pending
+					if(attribute_name_in_list("type", tk->stt.attributes) == 0)
+					{
+						if((strcmp(current_node->name, "table") == 0) ||
+						   (strcmp(current_node->name, "tbody") == 0) ||
+						   (strcmp(current_node->name, "tfoot") == 0) ||
+						   (strcmp(current_node->name, "thead") == 0) ||
+						   (strcmp(current_node->name, "tr") == 0))
+						{
+							apply_foster_parenting = 1;
+						}
+
+						in_body_mode(tk);
+				
+						apply_foster_parenting = 0;
+					}
+					else
+					{
+						unsigned char *attr_val = get_attribute_value("type", tk->stt.attributes);
+
+						if((attr_val != NULL) && (strcasecmp(attr_val, "hidden") == 0))
+						{
+							element_node *e;
+
+							//parse error
+							parse_error(UNEXPECTED_START_TAG, line_number);
+
+							e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
+							add_child_node(current_node, (node *)e);
+
+						}
+						else
+						{
+							if((strcmp(current_node->name, "table") == 0) ||
+							   (strcmp(current_node->name, "tbody") == 0) ||
+							   (strcmp(current_node->name, "tfoot") == 0) ||
+							   (strcmp(current_node->name, "thead") == 0) ||
+							   (strcmp(current_node->name, "tr") == 0))
+							{
+								apply_foster_parenting = 1;
+							}
+
+							in_body_mode(tk);
+				
+							apply_foster_parenting = 0;
+
+						}
+
+						free(attr_val);
+					}
 				}
 				else if(strcmp(tk->stt.tag_name, "form") == 0)
 				{

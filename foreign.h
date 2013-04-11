@@ -5,6 +5,12 @@
 #include "token.h"
 #include "tree.h"
 
+
+#ifdef WIN32
+#define strcasecmp stricmp
+#endif
+
+
 void adjust_svg_attributes(attribute_list *svg_attrs);
 
 void adjust_mathml_attributes(attribute_list *mathml_attrs);
