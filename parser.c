@@ -388,6 +388,7 @@ tokenization_state current_state;
 insertion_mode original_insertion_mode;
 insertion_mode current_mode;
 element_node *current_node;
+element_node *context_node = NULL;
 element_node *form_element_ptr = NULL, *head_element_ptr = NULL;
 active_formatting_list *active_formatting_elements = NULL;
 element_stack *o_e_stack = NULL;
@@ -439,15 +440,17 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	}
 
 
-	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
+	//html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
+	html_parse_memory_fragment(file_buffer, buffer_length, "math", MATHML, root_ptr);
+
 
 	return 1;
 }
 
 
 /*----------------------------------------------------------------------------*/
-void html_parse_memory_fragment(unsigned char *string_buffer, long string_length, unsigned char *context, node **root_ptr)
+void html_parse_memory_fragment(unsigned char *string_buffer, long string_length, unsigned char *context, namespace_type context_namespace, node **root_ptr)
 {	
 	element_node *html_node;
 	tokenization_state start_state;
@@ -462,6 +465,9 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 	html_node = create_element_node("html", NULL, HTML);
 	add_child_node(doc_root, (node *)html_node);
 	open_element_stack_push(&o_e_stack, html_node);
+
+	//make context_node to point to context element
+	context_node = create_element_node(context, NULL, context_namespace);
 
 	form_element_ptr = NULL;
 
@@ -502,6 +508,11 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 
 	html_parse_memory_1(string_buffer, string_length, html_node, start_state, start_mode);
 
+	//the context_node needs to be freed here.
+	free_node((node *)context_node);
+	context_node = NULL;
+
+
 	*root_ptr = (node *)doc_root;
 	
 }
@@ -512,6 +523,7 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **root_ptr, token **doctype_ptr)
 {
 	o_e_stack = NULL;
+	context_node = NULL;
 
 	//create a document root element
 	doc_root = create_element_node("DOC", NULL, HTML);
@@ -9988,36 +10000,103 @@ void parse_token_in_foreign_content(const token *tk)
 							 (attribute_name_in_list("face", tk->stt.attributes) == 1) || 
 							 (attribute_name_in_list("size", tk->stt.attributes) == 1))))
 				{
+					element_stack *stack_node = o_e_stack;
+					int use_rules_for_in_body_mode = 0;
+
 					//parse error
 					parse_error(UNEXPECTED_START_TAG, line_number);
 
-					//Pop an element from the stack of open elements
-					open_element_stack_pop(&o_e_stack);
-					current_node = open_element_stack_top(o_e_stack);
-
-					//and then keep popping more elements from the stack of open elements
-					//until the current node is a MathML text integration point, an HTML integration point, or an element in the HTML namespace.
-					while((is_mathml_text_integration_point(current_node) != 1) && 
-						  (is_html_integration_point(current_node) != 1) && 
-						  (current_node->name_space != HTML))
+					if(strcmp(stack_node->e->name, "html") == 0)
 					{
+						use_rules_for_in_body_mode = 1;
+					}
+					else
+					{
+						while(stack_node != NULL)
+						{
+						
+							if(is_mathml_text_integration_point(stack_node->e) ||
+							    is_html_integration_point(stack_node->e) ||
+							    (stack_node->e->name_space == HTML))
+							{
+								use_rules_for_in_body_mode = 0;
+								break;
+							}
+							else if(((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "applet") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "caption") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "html") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "table") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "td") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "th") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "marquee") == 0)) ||
+									((stack_node->e->name_space == HTML) && (strcmp(stack_node->e->name, "object") == 0)) ||
+									((stack_node->e->name_space == MATHML) && (strcmp(stack_node->e->name, "mi") == 0)) ||
+									((stack_node->e->name_space == MATHML) && (strcmp(stack_node->e->name, "mo") == 0)) ||
+									((stack_node->e->name_space == MATHML) && (strcmp(stack_node->e->name, "mn") == 0)) ||
+									((stack_node->e->name_space == MATHML) && (strcmp(stack_node->e->name, "ms") == 0)) ||
+									((stack_node->e->name_space == MATHML) && (strcmp(stack_node->e->name, "mtext") == 0)) ||
+									((stack_node->e->name_space == MATHML) && (strcmp(stack_node->e->name, "annotation-xml") == 0)) ||
+									((stack_node->e->name_space == SVG) && (strcmp(stack_node->e->name, "foreignObject") == 0)) ||
+									((stack_node->e->name_space == SVG) && (strcmp(stack_node->e->name, "desc") == 0)) ||
+									((stack_node->e->name_space == SVG) && (strcmp(stack_node->e->name, "title") == 0)))
+							{
+								use_rules_for_in_body_mode = 1;
+								break;	
+							}
+							else
+							{
+								stack_node = stack_node->tail;
+							}
+						}
+					}
+
+					
+
+					if(use_rules_for_in_body_mode)
+					{
+						in_body_mode(tk);
+					}
+					else
+					{
+						//------------------------------------------------
+						//Pop an element from the stack of open elements
 						open_element_stack_pop(&o_e_stack);
 						current_node = open_element_stack_top(o_e_stack);
-					}
+
+						//and then keep popping more elements from the stack of open elements
+						//until the current node is a MathML text integration point, an HTML integration point, or an element in the HTML namespace.
+						while((is_mathml_text_integration_point(current_node) != 1) && 
+							  (is_html_integration_point(current_node) != 1) && 
+							  (current_node->name_space != HTML))
+						{
+							open_element_stack_pop(&o_e_stack);
+							current_node = open_element_stack_top(o_e_stack);
+						}
 					
-					//Then, reprocess the token.
-					token_process = REPROCESS;
+						//Then, reprocess the token.
+						token_process = REPROCESS;
+
+						//------------------------------------------------
+					}
 				}
 				else
 				{
 					element_node *e;
 					unsigned char *token_start_tag_name = tk->stt.tag_name;
 
-					if(current_node->name_space == MATHML)
+					if(((context_node != NULL) && 
+						(context_node->name_space == MATHML) && 
+						(strcmp(current_node->name, "html") == 0)) 
+						|| 
+					   (current_node->name_space == MATHML))
 					{
 						adjust_mathml_attributes(tk->stt.attributes);
 					}
-					else if(current_node->name_space == SVG)
+					else if(((context_node != NULL) && 
+							 (context_node->name_space == SVG) && 
+							 (strcmp(current_node->name, "html") == 0)) 
+							|| 
+						    (current_node->name_space == SVG))
 					{
 						//tk->stt.tag_name = adjust_svg_start_tag_name(tk->stt.tag_name);
 						
@@ -10026,12 +10105,25 @@ void parse_token_in_foreign_content(const token *tk)
 
 						adjust_svg_attributes(tk->stt.attributes);
 					}
+					else
+					{
+						;
+					}
 
 					//Adjust foreign attributes for the token.
 					adjust_foreign_attributes(tk->stt.attributes);
 
-					//Insert a foreign element for the token, in the same namespace as the current node
-					e = create_element_node(token_start_tag_name, tk->stt.attributes, current_node->name_space);
+					//Insert a foreign element for the token, in the same namespace as the adjusted current node or current node
+					if((strcmp(current_node->name, "html") == 0) && (context_node != NULL))
+					{
+						e = create_element_node(token_start_tag_name, tk->stt.attributes, context_node->name_space);
+					}
+					else
+					{
+						e = create_element_node(token_start_tag_name, tk->stt.attributes, current_node->name_space);
+					}
+
+
 					add_child_node(current_node, (node *)e);
 					
 					open_element_stack_push(&o_e_stack, e);
@@ -10188,12 +10280,29 @@ void process_token(token *tk)
 {
 	if(tk != NULL)
 	{
+		element_node *curr_node;
+
+			
 		do
 		{
 			token_process = NOT_REPROCESS;
 
+			//pass context_node to parsing_token_in_html_content() when:
+			//parsing HTML fragment and the stack has only one element in it.
+			if((context_node != NULL) &&											//parsing HTML fragment
+			   ((current_node != NULL) && (strcmp(current_node->name, "html") == 0))		//the stack has only one element in it
+			  )
+			{
+				curr_node = context_node;
+			}
+			else
+			{
+				curr_node = current_node;
+			}
+
+
 			//parse token in html content or foreign content?
-			if(parsing_token_in_html_content(current_node, tk) == 1)
+			if(parsing_token_in_html_content(curr_node, tk) == 1)
 			{
 				tree_cons_state_functions[current_mode](tk);
 			}

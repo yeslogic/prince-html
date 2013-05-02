@@ -17,6 +17,6 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **root_ptr, token **doctype_ptr);
 
 
-void html_parse_memory_fragment(unsigned char *string_buffer, long string_length, unsigned char *context, node **root_ptr);
+void html_parse_memory_fragment(unsigned char *string_buffer, long string_length, unsigned char *context, namespace_type context_namespace, node **root_ptr);
 
 /*------------------------------------------------------------------------*/
