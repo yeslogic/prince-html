@@ -440,9 +440,9 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	}
 
 
-	//html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
+	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
-	html_parse_memory_fragment(file_buffer, buffer_length, "math", MATHML, root_ptr);
+	//html_parse_memory_fragment(file_buffer, buffer_length, "math", MATHML, root_ptr);
 
 
 	return 1;
@@ -5190,7 +5190,6 @@ void in_head_mode(const token *tk)
 				else if((strcmp(tk->stt.tag_name, "base") == 0) ||
 						(strcmp(tk->stt.tag_name, "basefont") == 0) ||
 						(strcmp(tk->stt.tag_name, "bgsound") == 0) ||
-						(strcmp(tk->stt.tag_name, "command") == 0) ||
 						(strcmp(tk->stt.tag_name, "link") == 0))
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
@@ -5849,7 +5848,6 @@ void in_body_mode(const token *tk)
 				else if((strcmp(tk->stt.tag_name, "base") == 0) ||
 						(strcmp(tk->stt.tag_name, "basefont") == 0) ||
 						(strcmp(tk->stt.tag_name, "bgsound") == 0) ||
-						(strcmp(tk->stt.tag_name, "command") == 0) ||
 						(strcmp(tk->stt.tag_name, "link") == 0) ||
 						(strcmp(tk->stt.tag_name, "meta") == 0) ||
 						(strcmp(tk->stt.tag_name, "noframes") == 0) ||
@@ -5903,6 +5901,7 @@ void in_body_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "blockquote") == 0) ||
 						(strcmp(tk->stt.tag_name, "center") == 0) ||
 						(strcmp(tk->stt.tag_name, "details") == 0) ||
+						(strcmp(tk->stt.tag_name, "dialog") == 0) ||
 						(strcmp(tk->stt.tag_name, "dir") == 0) ||
 						(strcmp(tk->stt.tag_name, "div") == 0) ||
 						(strcmp(tk->stt.tag_name, "dl") == 0) ||
@@ -5912,6 +5911,7 @@ void in_body_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "footer") == 0) ||
 						(strcmp(tk->stt.tag_name, "header") == 0) ||
 						(strcmp(tk->stt.tag_name, "hgroup") == 0) ||
+						(strcmp(tk->stt.tag_name, "main") == 0) ||
 						(strcmp(tk->stt.tag_name, "menu") == 0) ||
 						(strcmp(tk->stt.tag_name, "nav") == 0) ||
 						(strcmp(tk->stt.tag_name, "ol") == 0) ||
@@ -6994,6 +6994,7 @@ void in_body_mode(const token *tk)
 						(strcmp(tk->ett.tag_name, "button") == 0) ||
 						(strcmp(tk->ett.tag_name, "center") == 0) ||
 						(strcmp(tk->ett.tag_name, "details") == 0) ||
+						(strcmp(tk->ett.tag_name, "dialog") == 0) ||
 						(strcmp(tk->ett.tag_name, "dir") == 0) ||
 						(strcmp(tk->ett.tag_name, "div") == 0) ||
 						(strcmp(tk->ett.tag_name, "dl") == 0) ||
@@ -7004,6 +7005,7 @@ void in_body_mode(const token *tk)
 						(strcmp(tk->ett.tag_name, "header") == 0) ||
 						(strcmp(tk->ett.tag_name, "hgroup") == 0) ||
 						(strcmp(tk->ett.tag_name, "listing") == 0) ||
+						(strcmp(tk->ett.tag_name, "main") == 0) ||
 						(strcmp(tk->ett.tag_name, "menu") == 0) ||
 						(strcmp(tk->ett.tag_name, "nav") == 0) ||
 						(strcmp(tk->ett.tag_name, "ol") == 0) ||
