@@ -6025,7 +6025,7 @@ void in_body_mode(const token *tk)
 					//If the next token is a U+000A LINE FEED (LF) character token, 
 					//then ignore that token and move on to the next one. 
 					//(Newlines at the start of prep168 blocks are ignored as an authoring convenience.)
-					if(file_buf[curr_buffer_index + 1] == LINE_FEED)
+					if(((curr_buffer_index + 1) < buffer_len) && (file_buf[curr_buffer_index + 1] == LINE_FEED))
 					{	
 						character_skip += 1;
 						line_number += 1;
@@ -6627,7 +6627,7 @@ void in_body_mode(const token *tk)
 					current_node = open_element_stack_top(o_e_stack);
 
 					//ignore newline at the start of the textarea
-					if(file_buf[curr_buffer_index + 1] == LINE_FEED)
+					if(((curr_buffer_index + 1) < buffer_len) && (file_buf[curr_buffer_index + 1] == LINE_FEED))
 					{	
 						character_skip += 1;
 						line_number += 1;
