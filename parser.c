@@ -417,6 +417,7 @@ long text_char_count = 0;
 
 long curr_buffer_index;
 long buffer_len;
+unsigned char *file_buf = NULL;
 
 unsigned long line_number = 1;
 
@@ -564,7 +565,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	current_mode = starting_mode;
 
 	buffer_len = buffer_length;
-	curr_buffer_index = 0;
+	file_buf = file_buffer;
 
 	form_element_ptr = NULL;
 	head_element_ptr = NULL;
@@ -612,6 +613,8 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	{
 		curr_index = 0;
 	}
+	curr_buffer_index = curr_index;
+
 
 	while(curr_index < buffer_length)
 	{
@@ -6022,6 +6025,11 @@ void in_body_mode(const token *tk)
 					//If the next token is a U+000A LINE FEED (LF) character token, 
 					//then ignore that token and move on to the next one. 
 					//(Newlines at the start of prep168 blocks are ignored as an authoring convenience.)
+					if(file_buf[curr_buffer_index + 1] == LINE_FEED)
+					{	
+						character_skip += 1;
+						line_number += 1;
+					}
 
 					//Set the frameset-ok flag to "not ok".
 				}
@@ -6618,7 +6626,13 @@ void in_body_mode(const token *tk)
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 
-					//implementation pending: ignore newlines at the start of the textarea
+					//ignore newline at the start of the textarea
+					if(file_buf[curr_buffer_index + 1] == LINE_FEED)
+					{	
+						character_skip += 1;
+						line_number += 1;
+					}
+
 					current_state = RCDATA_STATE;
 					original_insertion_mode = current_mode;
 					current_mode = TEXT;
