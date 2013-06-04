@@ -272,6 +272,7 @@ void process_trailing_text(void);
 void process_trailing_comment(void);
 void process_token(token *tk);
 void process_eof(void);
+void copy_text_chunk(void);
 void append_null_replacement(void);
 void append_null_replacement_for_attribute_value(void);
 
@@ -650,8 +651,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	}
 
 	process_eof();
-	process_trailing_text();
-	process_trailing_comment();
+
 }
 
 
@@ -3660,12 +3660,22 @@ void bogus_comment_state_s44(unsigned char *ch)
 
 	curr_token = create_comment_token();
 
-	if(*(ch - 1) == NULL_CHARACTER)		//include the character before the current one in the comment
+	//include the character before the current one in the comment
+	if(*(ch - 1) == NULL_CHARACTER)		
 	{
 		for(i = 0; i < len; i++)
 		{
 			curr_token->cmt.comment = string_append(curr_token->cmt.comment, byte_seq[i]);
 		}
+	}
+	else if(*(ch - 1) == GREATER_THAN_SIGN)
+	{
+		current_state = DATA_STATE;
+		character_consumption = RECONSUME;
+	
+		process_token(curr_token);
+		curr_token = NULL;
+		return;
 	}
 	else
 	{
@@ -3682,7 +3692,7 @@ void bogus_comment_state_s44(unsigned char *ch)
 			break;
 		}
 
-		if(*(ch + j) == NULL_CHARACTER)		//include the character before the current one in the comment
+		if(*(ch + j) == NULL_CHARACTER)
 		{
 			for(i = 0; i < len; i++)
 			{
@@ -4716,6 +4726,8 @@ void cdata_section_state_s68(unsigned char *ch)
 	//UTF-8 sequence for replacement char(0xFFFD)
 	utf8_byte_sequence(0xFFFD, byte_seq);
 
+	current_state = DATA_STATE;
+
 
 	//if there is text before "<![CDATA[", copy it to the text_buffer:
 	if((text_chunk != NULL) && (text_char_count > 0))
@@ -4752,7 +4764,6 @@ void cdata_section_state_s68(unsigned char *ch)
 			//skip total number of characters consumed, less one.
 			character_skip = temp_index - curr_buffer_index + 2;
 
-			current_state = DATA_STATE;
 			return;
 		}
 
@@ -4821,7 +4832,6 @@ void cdata_section_state_s68(unsigned char *ch)
 	//skip total number of characters consumed, less one.
 	character_skip = buffer_len - curr_buffer_index - 1;
 
-	current_state = DATA_STATE;
 }
 
 
@@ -6456,7 +6466,8 @@ void in_body_mode(const token *tk)
 					//If the token does not have an attribute with the name "type", or if it does, but that attribute's value is not
 					//an ASCII case-insensitive match for the string "hidden", then: set the frameset-ok flag to "not ok".
 				}
-				else if((strcmp(tk->stt.tag_name, "param") == 0) ||
+				else if((strcmp(tk->stt.tag_name, "menuitem") == 0) ||
+						(strcmp(tk->stt.tag_name, "param") == 0) ||
 						(strcmp(tk->stt.tag_name, "source") == 0) ||
 						(strcmp(tk->stt.tag_name, "track") == 0))
 				{
@@ -10337,7 +10348,257 @@ void process_token(token *tk)
 /*------------------------------------------------------------------------------------*/
 void process_eof(void)
 {
+
+	switch(current_state)
+	{
+		case DATA_STATE:
+		case RCDATA_STATE:
+		case RAWTEXT_STATE:
+		case SCRIPT_DATA_STATE:
+		case PLAINTEXT_STATE:
+			{
+				;
+			}
+			break;
+		case TAG_NAME_STATE:
+			{
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case CHARACTER_REFERENCE_IN_DATA_STATE:
+		case CHARACTER_REFERENCE_IN_RCDATA_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//append the ampersand(&) to the text_buffer
+				text_buffer = string_append(text_buffer, AMPERSAND);
+				//have a text node created if not yet created
+				process_token(create_character_token(AMPERSAND));
+			}
+			break;
+		case RCDATA_LESS_THAN_SIGN_STATE:
+		case RAWTEXT_LESS_THAN_SIGN_STATE:
+		case SCRIPT_DATA_LESS_THAN_SIGN_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
+				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
+				//have a text node created if not yet created
+				process_token(create_character_token(LESS_THAN_SIGN));
+			}
+			break;
+		case TAG_OPEN_STATE:
+		case SCRIPT_DATA_ESCAPED_LESS_THAN_SIGN_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
+				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
+				//have a text node created if not yet created
+				process_token(create_character_token(LESS_THAN_SIGN));
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case RCDATA_END_TAG_OPEN_STATE:
+		case RAWTEXT_END_TAG_OPEN_STATE:
+		case SCRIPT_DATA_END_TAG_OPEN_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
+				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
+				//add the '/' to the text_buffer.
+				text_buffer = string_append(text_buffer, SOLIDUS);
+				//have a text node created if not yet created
+				process_token(create_character_token(LESS_THAN_SIGN));
+			}
+			break;
+		case END_TAG_OPEN_STATE:
+		case SCRIPT_DATA_ESCAPED_END_TAG_OPEN_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
+				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
+				//add the '/' to the text_buffer.
+				text_buffer = string_append(text_buffer, SOLIDUS);
+				//have a text node created if not yet created
+				process_token(create_character_token(LESS_THAN_SIGN));
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case RCDATA_END_TAG_NAME_STATE:
+		case RAWTEXT_END_TAG_NAME_STATE:
+		case SCRIPT_DATA_END_TAG_NAME_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
+				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
+				//add the '/' to the text_buffer.
+				text_buffer = string_append(text_buffer, SOLIDUS);
+				//append the temporary buffer to the text_buffer
+				if(temp_buf != NULL)
+				{
+					long len = strlen(temp_buf);
+					text_buffer = string_n_append(text_buffer, temp_buf, len);
+
+					free(temp_buf);
+					temp_buf = NULL;
+				}
+				//have a text node created if not yet created 
+				process_token(create_character_token(LESS_THAN_SIGN));
+
+			}
+			break;
+		case SCRIPT_DATA_ESCAPED_END_TAG_NAME_STATE:
+			{
+				//copy text_chunk from file buffer to text_buffer:
+				copy_text_chunk();
+				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
+				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
+				//add the '/' to the text_buffer.
+				text_buffer = string_append(text_buffer, SOLIDUS);
+				//append the temporary buffer to the text_buffer
+				if(temp_buf != NULL)
+				{
+					long len = strlen(temp_buf);
+					text_buffer = string_n_append(text_buffer, temp_buf, len);
+
+					free(temp_buf);
+					temp_buf = NULL;
+				}
+				//have a text node created if not yet created 
+				process_token(create_character_token(LESS_THAN_SIGN));
+
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+
+			}
+			break;
+		case SCRIPT_DATA_ESCAPE_START_STATE:
+		case SCRIPT_DATA_ESCAPE_START_DASH_STATE:
+			{
+				;
+			}
+			break;
+		case SCRIPT_DATA_ESCAPED_STATE:
+		case SCRIPT_DATA_ESCAPED_DASH_STATE:
+		case SCRIPT_DATA_ESCAPED_DASH_DASH_STATE:
+		case SCRIPT_DATA_DOUBLE_ESCAPE_START_STATE:
+		case SCRIPT_DATA_DOUBLE_ESCAPED_STATE:
+		case SCRIPT_DATA_DOUBLE_ESCAPED_DASH_STATE:
+		case SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH_STATE:
+		case SCRIPT_DATA_DOUBLE_ESCAPED_LESS_THAN_SIGN_STATE:
+		case SCRIPT_DATA_DOUBLE_ESCAPE_END_STATE:
+			{
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case BEFORE_ATTRIBUTE_NAME_STATE:
+		case ATTRIBUTE_NAME_STATE:
+		case AFTER_ATTRIBUTE_NAME_STATE:
+		case BEFORE_ATTRIBUTE_VALUE_STATE:
+		case ATTRIBUTE_VALUE_DOUBLE_QUOTED_STATE:
+		case ATTRIBUTE_VALUE_SINGLE_QUOTED_STATE:
+		case ATTRIBUTE_VALUE_UNQUOTED_STATE:
+		case CHARACTER_REFERENCE_IN_ATTRIBUTE_VALUE_STATE:
+		case AFTER_ATTRIBUTE_VALUE_QUOTED_STATE:
+		case SELF_CLOSING_START_TAG_STATE:
+			{
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case BOGUS_COMMENT_STATE:
+			{
+				curr_token = create_comment_token();
+				//include the last character of the buffer in the comment
+				curr_token->cmt.comment = string_append(curr_token->cmt.comment, file_buf[buffer_len - 1]);
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case MARKUP_DECLARATION_OPEN_STATE:
+			{
+				curr_token = create_comment_token();
+
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case COMMENT_START_STATE:
+		case COMMENT_START_DASH_STATE:
+		case COMMENT_STATE:
+		case COMMENT_END_DASH_STATE:
+		case COMMENT_END_STATE:
+		case COMMENT_END_BANG_STATE:
+			{
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case DOCTYPE_STATE:
+		case BEFORE_DOCTYPE_NAME_STATE:
+			{
+				process_token(create_doctype_token('\0'));
+
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case DOCTYPE_NAME_STATE:
+		case AFTER_DOCTYPE_NAME_STATE:
+		case AFTER_DOCTYPE_PUBLIC_KEYWORD_STATE:
+		case BEFORE_DOCTYPE_PUBLIC_IDENTIFIER_STATE:
+		case DOCTYPE_PUBLIC_IDENTIFIER_DOUBLE_QUOTED_STATE:
+		case DOCTYPE_PUBLIC_IDENTIFIER_SINGLE_QUOTED_STATE:
+		case AFTER_DOCTYPE_PUBLIC_IDENTIFIER_STATE:
+		case BETWEEN_DOCTYPE_PUBLIC_AND_SYSTEM_IDENTIFIERS_STATE:
+		case AFTER_DOCTYPE_SYSTEM_KEYWORD_STATE:
+		case BEFORE_DOCTYPE_SYSTEM_IDENTIFIER_STATE:
+		case DOCTYPE_SYSTEM_IDENTIFIER_DOUBLE_QUOTED_STATE:
+		case DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED_STATE:
+		case AFTER_DOCTYPE_SYSTEM_IDENTIFIER_STATE:
+			{
+				//At this stage, a DOCTYPE token should've been created and it's name should not be empty.
+				if((curr_token != NULL) && (curr_token->type  == TOKEN_DOCTYPE))
+				{
+					process_token(curr_token);
+				}
+				//parse error
+				parse_error(UNEXPECTED_END_OF_FILE, line_number);
+			}
+			break;
+		case BOGUS_DOCTYPE_STATE:
+			{
+				//At this stage, a DOCTYPE token should've been created and it's name should not be empty.
+				if((curr_token != NULL) && (curr_token->type  == TOKEN_DOCTYPE))
+				{
+					process_token(curr_token);
+				}
+			}
+			break;
+		case CDATA_SECTION_STATE:
+			{
+				;
+			}
+			break;
+
+		default:
+			break;
+	}
+
 	process_token(create_eof_token());
+
+	//there may be trailing text, or trailing comment. But not both.
+	process_trailing_text();
+	process_trailing_comment();
 }
 
 
@@ -10356,11 +10617,11 @@ void process_trailing_comment(void)
 		}
 		else if(current_mode == AFTER_BODY)
 		{
-			node *html_node = doc_root->first_child;
+			element_node *html_node = get_node_by_name(o_e_stack, "html");
 
-			if((html_node != NULL) && (html_node->type == ELEMENT_N))
+			if(html_node != NULL)
 			{
-				add_child_node((element_node *)html_node, (node *)c);
+				add_child_node(html_node, (node *)c);
 			}
 		}
 		else
@@ -10373,7 +10634,17 @@ void process_trailing_comment(void)
 	}
 }
 
+/*------------------------------------------------------------------------------------*/
+void copy_text_chunk(void)
+{
+	if((text_chunk != NULL) && (text_char_count > 0))
+	{
+		text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+	}
 
+	text_chunk = NULL;
+	text_char_count = 0;
+}
 /*------------------------------------------------------------------------------------*/
 void append_null_replacement(void)
 {
