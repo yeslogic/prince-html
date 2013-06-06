@@ -1662,7 +1662,7 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 
 
 /*This function returns 1 if conversion is successful, returns 0 if conversion fails.(from_encoding is not a supported encoding)
-  The input_buffer is freed when the function returns 1. It is not freed when the function returns 0.*/
+  Converted document is placed in output_buffer. The input_buffer is left unchanged in both cases*/
 int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsigned char *from_encoding, 
 					unsigned char **output_buffer, long *output_length)
 {
@@ -1757,8 +1757,6 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 						*output_length = (output_buf_len - max_bytes_out);
 						*output_buffer = temp_output_buf;
 
-						free(input_buffer);
-
 						return 1;
 
 					}
@@ -1829,8 +1827,6 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 
 	*output_length = (output_buf_len - max_bytes_out);
 	*output_buffer = temp_output_buf;
-
-	free(input_buffer);
 
 	return 1;
 	
