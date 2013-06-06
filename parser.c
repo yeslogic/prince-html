@@ -280,6 +280,8 @@ int is_in_a_script_data_parsing_state(void);
 
 void parse_error(error_message_type err_msg, unsigned long line_num);
 
+void print_stack(element_stack *st);
+
 
 /*--------------------TOKENISER STATE MACHINE-----------------------------*/
 /*------------------------------------------------------------------------*/
@@ -7657,6 +7659,7 @@ void in_table_mode(const token *tk)
 				if(strcmp(tk->ett.tag_name, "table") == 0)
 				{	
 					element_node *match_node;
+					
 					if(has_element_in_table_scope(o_e_stack, "table", &match_node) == 1)
 					{
 						pop_elements_up_to(&o_e_stack, "table");
@@ -9764,7 +9767,7 @@ insertion_mode reset_insertion_mode(element_stack *st)
 		}
 		else
 		{
-			return IN_BODY;			//fragment case
+			;//return IN_BODY;			//fragment case
 		}
 
 		st = previous_stack_node(st);
@@ -10826,3 +10829,18 @@ void parse_error(error_message_type err_msg, unsigned long line_num)
 		;	//unknown error message
 	}
 }
+
+
+/*---------------- test function -----------------*/
+void print_stack(element_stack *st)
+{
+	printf("stack-->");
+	while(st != NULL)
+	{
+		printf("%s->", st->e->name);
+
+		st= previous_stack_node(st);
+	}
+	printf("-|\n");
+}
+
