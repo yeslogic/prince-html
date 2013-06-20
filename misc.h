@@ -19,6 +19,6 @@ element_node *back_to_table_body_context(element_stack **st_ptr);
 element_node *back_to_table_row_context(element_stack **st_ptr);
 
 int is_in_special_category(element_node *e);
-element_node *generate_implied_end_tags(element_stack **st_ptr);
+element_node *generate_implied_end_tags(element_stack **st_ptr, unsigned char *to_exclude);
 void add_child_to_foster_parent(element_stack *o_e_st, node *child_node);
 element_node *get_node_by_name(element_stack *st, unsigned char *element_name);

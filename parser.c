@@ -6798,7 +6798,13 @@ void in_body_mode(const token *tk)
 
 					if(has_element_in_scope(o_e_stack, "ruby", &match_node) == 1)
 					{
-						current_node = generate_implied_end_tags(&o_e_stack);
+						current_node = generate_implied_end_tags(&o_e_stack, NULL);
+					}
+
+					if(strcmp(current_node->name, "ruby") != 0)
+					{
+						//parse error
+						parse_error(UNEXPECTED_START_TAG, line_number);
 					}
 
 					e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
@@ -6988,6 +6994,16 @@ void in_body_mode(const token *tk)
 
 					if(has_element_in_button_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
+						//Generate implied end tags, except for elements with the same tag name as the token("p").
+						current_node = generate_implied_end_tags(&o_e_stack, "p");
+
+						//If the current node is not an element with the same tag name as that of the token, then this is a parse error
+						if(strcmp(current_node->name, "p") != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);	
+						}
+
 						pop_elements_up_to(&o_e_stack, "p");
 						current_node = open_element_stack_top(o_e_stack);
 					}
@@ -7045,8 +7061,17 @@ void in_body_mode(const token *tk)
 
 					if(has_element_in_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
+						current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+						if(strcmp(current_node->name, tk->ett.tag_name ) != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
+
 						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
 						current_node = open_element_stack_top(o_e_stack);
+
 					}
 					else
 					{
@@ -7072,6 +7097,14 @@ void in_body_mode(const token *tk)
 					}
 					else
 					{
+						current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+						if(strcmp(current_node->name , form_element_node->name) != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
+
 						pop_elements_up_to(&o_e_stack, "form");
 						current_node = open_element_stack_top(o_e_stack);
 					}
@@ -7100,6 +7133,14 @@ void in_body_mode(const token *tk)
 					{
 						element_node *temp_element;
 						int header_found = 0;
+
+						current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+						if(strcmp(current_node->name, tk->ett.tag_name) != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
 						
 						while(o_e_stack != NULL)
 						{
@@ -7134,6 +7175,15 @@ void in_body_mode(const token *tk)
 					
 					if(has_element_in_list_item_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
+						
+						current_node = generate_implied_end_tags(&o_e_stack, "li");
+
+						if(strcmp(current_node->name, "li") != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
+						
 						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
 						current_node = open_element_stack_top(o_e_stack);
 					}
@@ -7150,6 +7200,15 @@ void in_body_mode(const token *tk)
 
 					if(has_element_in_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
+						
+						current_node = generate_implied_end_tags(&o_e_stack, tk->ett.tag_name);
+
+						if(strcmp(current_node->name, tk->ett.tag_name) != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
+
 						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
 						current_node = open_element_stack_top(o_e_stack);
 					}
@@ -7190,6 +7249,14 @@ void in_body_mode(const token *tk)
 					//of the token, then this is a parse error ; ignore the token.
 					if(has_element_in_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1)
 					{
+						current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+						if(strcmp(current_node->name, tk->ett.tag_name) != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
+
 						pop_elements_up_to(&o_e_stack, tk->ett.tag_name);
 						current_node = open_element_stack_top(o_e_stack);
 
@@ -7238,7 +7305,7 @@ void in_body_mode(const token *tk)
 
 						if(strcmp(temp_element->name, tk->ett.tag_name) == 0)
 						{
-							current_node = generate_implied_end_tags(&o_e_stack);
+							current_node = generate_implied_end_tags(&o_e_stack, tk->ett.tag_name);
 
 							if(strcmp(current_node->name, tk->ett.tag_name) != 0)
 							{
@@ -7273,7 +7340,7 @@ void in_body_mode(const token *tk)
 
 						if(strcmp(temp_element->name, tk->ett.tag_name) == 0)
 						{
-							current_node = generate_implied_end_tags(&o_e_stack);
+							current_node = generate_implied_end_tags(&o_e_stack, tk->ett.tag_name);
 
 							if(strcmp(current_node->name, tk->ett.tag_name) != 0)
 							{
@@ -7931,6 +7998,15 @@ void in_caption_mode(const token *tk)
 					free(text_buffer);
 					text_buffer = NULL;
 				}
+			}
+
+			//generate implied end tags
+			current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+			if(strcmp(current_node->name, "caption") != 0)
+			{
+				//parse error
+				parse_error(UNEXPECTED_END_TAG, line_number);
 			}
 
 			pop_elements_up_to(&o_e_stack, "caption");
@@ -8613,6 +8689,15 @@ void in_cell_mode(const token *tk)
 					free(text_buffer);
 					text_buffer = NULL;
 				}
+			}
+
+			//generate implied end tags
+			current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+			if(strcmp(current_node->name, tk->ett.tag_name) != 0)
+			{
+				//parse error
+				parse_error(UNEXPECTED_END_TAG, line_number);
 			}
 
 			//close the cell
@@ -9767,7 +9852,7 @@ insertion_mode reset_insertion_mode(element_stack *st)
 		}
 		else
 		{
-			;//return IN_BODY;			//fragment case
+			;
 		}
 
 		st = previous_stack_node(st);

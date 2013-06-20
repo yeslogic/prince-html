@@ -347,7 +347,13 @@ int is_in_special_category(element_node *e)
 	}
 }
 /*-----------------------------------------------------------------*/
-element_node *generate_implied_end_tags(element_stack **st_ptr)
+/*This function could pop elements off the stack of open elements.
+  The return value must be assigned to the current_node everytime
+  the function is called.
+  The caller should pass in NULL for to_exclude if no element is to
+  be excluded from the list.
+  */
+element_node *generate_implied_end_tags(element_stack **st_ptr, unsigned char *to_exclude)
 {
 	element_node *curr_element_node;
 
@@ -355,16 +361,23 @@ element_node *generate_implied_end_tags(element_stack **st_ptr)
 	
 	curr_element_node = open_element_stack_top(*st_ptr);
 
-	if((strcmp(curr_element_node->name, "dd") == 0) ||
-	   (strcmp(curr_element_node->name, "dt") == 0) ||
-	   (strcmp(curr_element_node->name, "li") == 0) ||
-	   (strcmp(curr_element_node->name, "option") == 0) ||
-	   (strcmp(curr_element_node->name, "optgroup") == 0) ||
-	   (strcmp(curr_element_node->name, "p") == 0) ||
-	   (strcmp(curr_element_node->name, "rp") == 0) ||
-	   (strcmp(curr_element_node->name, "rt") == 0))
+	while((strcmp(curr_element_node->name, "dd") == 0) ||
+		  (strcmp(curr_element_node->name, "dt") == 0) ||
+	      (strcmp(curr_element_node->name, "li") == 0) ||
+	      (strcmp(curr_element_node->name, "option") == 0) ||
+	      (strcmp(curr_element_node->name, "optgroup") == 0) ||
+	      (strcmp(curr_element_node->name, "p") == 0) ||
+	      (strcmp(curr_element_node->name, "rp") == 0) ||
+	      (strcmp(curr_element_node->name, "rt") == 0))
 	{
+		if((to_exclude != NULL) && (strcmp(curr_element_node->name, to_exclude) == 0))
+		{
+			break;
+		}
+
 		open_element_stack_pop(st_ptr);
+
+		curr_element_node = open_element_stack_top(*st_ptr);
 	}
 
 	return open_element_stack_top(*st_ptr);
