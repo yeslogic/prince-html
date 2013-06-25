@@ -13,6 +13,10 @@
 #include "token.h"
 #include "encode.h"
 
+#ifdef WIN32
+#define strcasecmp stricmp
+#endif
+
 
 int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_index,  
 				   unsigned char **attr_name, unsigned char **attr_value);
@@ -181,7 +185,7 @@ unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
 					{
 						attr_list = html_attribute_list_cons(attr_name, attr_value, HTML, attr_list);
 
-						if((strcmp(attr_name, "http-equiv") == 0) && (strcmp(attr_value, "content-type") == 0))
+						if((strcmp(attr_name, "http-equiv") == 0) && (strcasecmp(attr_value, "content-type") == 0))
 						{
 							got_pragma = 1;
 						}
@@ -330,6 +334,10 @@ unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
 int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_index, 
 				   unsigned char **attr_name, unsigned char **attr_value)
 {
+	unsigned char *attr_value_chunk = NULL;
+	long attr_value_char_count = 0;
+
+
 	while(*buf_index < buffer_length)
 	{
 		if((file_buffer[*buf_index] == CHARACTER_TABULATION) || 
@@ -444,17 +452,36 @@ int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_inde
 					if(file_buffer[*buf_index] == b)
 					{
 						*buf_index += 1;
+
+						if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+						{
+							*attr_value = string_n_append(*attr_value, attr_value_chunk, attr_value_char_count);
+						}
+						attr_value_chunk = NULL;
+						attr_value_char_count = 0;
+
 						return 1;		//attribute name is *attr_name, value is *attr_value.
 					}
+					/* do not convert upper-case to lower-case
 					else if((file_buffer[*buf_index] >= CAPITAL_A) && (file_buffer[*buf_index] <= CAPITAL_Z))
 					{
 						unsigned char c = file_buffer[*buf_index] + CAPITAL_TO_SMALL;
 						*attr_value = string_append(*attr_value, c);
 					}
+					*/
 					else
 					{
-						unsigned char c = file_buffer[*buf_index];
-						*attr_value = string_append(*attr_value, c);
+						//unsigned char c = file_buffer[*buf_index];
+						//*attr_value = string_append(*attr_value, c);
+						if(attr_value_char_count == 0)
+						{
+							attr_value_chunk = &file_buffer[*buf_index];
+							attr_value_char_count = 1;
+						}
+						else
+						{
+							attr_value_char_count += 1;
+						}
 					}
 
 					*buf_index += 1;
@@ -464,18 +491,25 @@ int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_inde
 			{
 				return 1;  //attribute name is *attr_name, value is the empty string.
 			}
+			/* do not convert upper-case to lower-case
 			else if((*buf_index < buffer_length) && ((file_buffer[*buf_index] >= CAPITAL_A) && (file_buffer[*buf_index] <= CAPITAL_Z)))
 			{
 				unsigned char c = file_buffer[*buf_index] + CAPITAL_TO_SMALL;
 				*attr_value = string_append(*attr_value, c);
 				*buf_index += 1;
-			}	
+			}
+			*/
 			else
 			{
 				if(*buf_index < buffer_length)
 				{
-					unsigned char c = file_buffer[*buf_index];
-					*attr_value = string_append(*attr_value, c);
+					//unsigned char c = file_buffer[*buf_index];
+					//*attr_value = string_append(*attr_value, c);
+
+					//start the attr_value_chunk
+					attr_value_chunk = &file_buffer[*buf_index];
+					attr_value_char_count = 1;
+
 					*buf_index += 1;
 				}
 			}
@@ -490,17 +524,29 @@ int get_attribute(unsigned char *file_buffer, long buffer_length, long *buf_inde
 				   (file_buffer[*buf_index] == SPACE) ||
 				   (file_buffer[*buf_index] == GREATER_THAN_SIGN))
 				{
+					if((attr_value_chunk != NULL) && (attr_value_char_count > 0))
+					{
+						*attr_value = string_n_append(*attr_value, attr_value_chunk, attr_value_char_count);
+					}	
+					attr_value_chunk = NULL;
+					attr_value_char_count = 0;
+
 					return 1;  //attribute name is *attr_name, value is *attr_value.
 				}
+				/* do not convert upper-case to lower-case
 				else if((file_buffer[*buf_index] >= CAPITAL_A) && (file_buffer[*buf_index] <= CAPITAL_Z))
 				{
 					unsigned char c = file_buffer[*buf_index] + CAPITAL_TO_SMALL;
 					*attr_value = string_append(*attr_value, c);
 				}
+				*/
 				else
 				{
-					unsigned char c = file_buffer[*buf_index];
-					*attr_value = string_append(*attr_value, c);
+					//unsigned char c = file_buffer[*buf_index];
+					//*attr_value = string_append(*attr_value, c);
+
+					//if we are ever here, we must have come from the "else" branch of the "if" statement of Step 10.
+					attr_value_char_count += 1;
 				}
 
 				*buf_index += 1;
@@ -1631,7 +1677,7 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 	else
 	{
 
-		if(strcmp(encoding_in_meta, "utf-8") == 0)
+		if(strcasecmp(encoding_in_meta, "utf-8") == 0)
 		{
 			//verify utf-8
 
