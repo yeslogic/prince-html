@@ -7089,8 +7089,12 @@ void in_body_mode(const token *tk)
 
 					form_element_ptr = NULL;
 
-					if((form_element_node == NULL) ||
-						(has_element_in_scope(o_e_stack, "form", &match_node) == 0))
+					if(form_element_node == NULL)
+					{
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
+					}
+					else if(has_element_in_scope(o_e_stack, "form", &match_node) == 0)
 					{
 						//parse error, ignore the token
 						parse_error(UNEXPECTED_END_TAG, line_number);
@@ -7105,7 +7109,8 @@ void in_body_mode(const token *tk)
 							parse_error(UNEXPECTED_END_TAG, line_number);
 						}
 
-						pop_elements_up_to(&o_e_stack, "form");
+						//pop_elements_up_to(&o_e_stack, "form");
+						remove_element_from_stack(&o_e_stack, form_element_node);
 						current_node = open_element_stack_top(o_e_stack);
 					}
 
