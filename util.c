@@ -379,7 +379,8 @@ unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_
 	else if(c == NUMBER_SIGN)
 	{
 
-		if((*(ch + 1) == 'x') || (*(ch + 1) == 'X'))
+		//if((*(ch + 1) == 'x') || (*(ch + 1) == 'X'))
+		if(((curr_buf_index + 1) < buf_len) && ((*(ch + 1) == 'x') || (*(ch + 1) == 'X')))
 		{
 			int num_hex_digits;
 			unsigned char *hex_string;
@@ -390,14 +391,16 @@ unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_
 			//interpret the number as hexadecimal number
 			//if the number is in the range 0xD800 to 0xDFFF or greater than 0x10FFFF, then this is a parse error
 			num_hex_digits = 0;
-			while(is_hex_digit(*(ch + 1 + num_hex_digits + 1)) == 1)
+			//while(is_hex_digit(*(ch + 1 + num_hex_digits + 1)) == 1)
+			while(((curr_buf_index + 1 + num_hex_digits + 1) < buf_len) && 
+				  (is_hex_digit(*(ch + 1 + num_hex_digits + 1))))
 			{
 				num_hex_digits += 1;
 			}
 
-			if((num_hex_digits == 0) || (*(ch + 1 + num_hex_digits + 1) != ';'))
+			//if((num_hex_digits == 0) || (*(ch + 1 + num_hex_digits + 1) != ';'))
+			if(num_hex_digits == 0)
 			{
-				//parse error
 				*chars_consumed = 0;	//consume no characters -- no character reference done
 				return NULL;
 			}
@@ -414,7 +417,16 @@ unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_
 				code_point = strtol(hex_string, &following_char, 16);
 				free(hex_string);
 				
-				*chars_consumed = num_hex_digits + 3;	//number of hex digits plus '#', 'x' and ';'.
+				//if(*(ch + 1 + num_hex_digits + 1) == ';')
+				if(((curr_buf_index + 1 + num_hex_digits + 1) < buf_len) && 
+				   (*(ch + 1 + num_hex_digits + 1) == ';'))
+				{
+					*chars_consumed = num_hex_digits + 3;	//number of hex digits plus '#', 'x' and ';'.
+				}
+				else
+				{
+					*chars_consumed = num_hex_digits + 2;	//number of hex digits plus '#' and 'x'.
+				}
 			}
 		}
 		else
@@ -423,14 +435,16 @@ unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_
 			unsigned char *dec_string;
 
 			num_dec_digits = 0;
-			while(is_dec_digit(*(ch + num_dec_digits + 1)) == 1)
+			//while(is_dec_digit(*(ch + num_dec_digits + 1)) == 1)
+			while(((curr_buf_index + num_dec_digits + 1) < buf_len) && 
+				  (is_dec_digit(*(ch + num_dec_digits + 1))))
 			{
 				num_dec_digits += 1;
 			}
 
-			if((num_dec_digits == 0) || (*(ch + num_dec_digits + 1) != ';'))
+			//if((num_dec_digits == 0) || (*(ch + num_dec_digits + 1) != ';'))
+			if(num_dec_digits == 0)
 			{
-				//parse error
 				*chars_consumed = 0;	//consume no characters -- no character reference done
 				return NULL;
 			}
@@ -447,7 +461,16 @@ unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_
 				code_point = strtol(dec_string, &following_char, 10);
 				free(dec_string);
 
-				*chars_consumed = num_dec_digits + 2;	//number of dec digits plus '#' and ';'.
+				//if(*(ch + num_dec_digits + 1) == ';')
+				if(((curr_buf_index + num_dec_digits + 1) < buf_len) && 
+				   (*(ch + num_dec_digits + 1) == ';'))
+				{
+					*chars_consumed = num_dec_digits + 2;	//number of dec digits plus '#' and ';'.
+				}
+				else
+				{
+					*chars_consumed = num_dec_digits + 1;	//number of dec digits plus '#'.
+				}
 			}
 		}
 
@@ -493,9 +516,9 @@ unsigned char *html_character_reference(unsigned char *ch, int is_attr, int has_
 				break;
 			}
 		}
-		//the code above says: get a string of 31 characters from after the &.
-		//or get a string from after the &,  up to (and including) the last char in buffer, if there are fewer than 31 chars left.
-		//or get a string from after the &,  up to (but not including) the SEMICOLON, if a SEMICOLON appears within 31 chars of the &.
+		//the code above says: get a string of 31 characters starting after the &.
+		//or get a string starting after the &,  up to (and including) the last char in buffer, if there are fewer than 31 chars left.
+		//or get a string starting after the &,  up to (but not including) the SEMICOLON, if a SEMICOLON is seen within 31 chars from the &.
 
 		if(initial_str_len == 0)
 		{
