@@ -1122,7 +1122,8 @@ int is_overlong_utf8(unsigned char *encoding_sequence, unsigned long remaining_c
 /*--------------------------------------------------------------------*/
 /*This function could return the input buffer if the document is verified as valid UTF-8 without
   any invalid sequences. The output buffer returned will be different to input buffer if there are
-  invalid sequences that have been replaced by replacement characters*/
+  invalid sequences that have been replaced by replacement characters. 
+  The iuput buffer remains unchanged in both cases*/
 unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *out_buf_len)
 {
 	long buf_pos, char_count, output_char_count;
@@ -1407,7 +1408,7 @@ unsigned char *verify_utf8_encoding(unsigned char *buffer, long buf_len, long *o
 		output = string_n_append_2(output, chunk, output_char_count, char_count);
 		output_char_count += char_count;
 
-		free(buffer);		//free old buffer.
+		//free(buffer);		//free old buffer.
 	}
 	
 
