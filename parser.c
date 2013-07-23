@@ -5208,21 +5208,45 @@ void in_head_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "link") == 0))
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+
+					if(apply_foster_parenting)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 		
 					//implementation pending: Acknowledge the token's self-closing flag , if it is set
 				}
 				else if(strcmp(tk->stt.tag_name, "meta") == 0)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+
+					if(apply_foster_parenting)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 
 					//implementation pending: Acknowledge the token's self-closing flag , if it is set.
 				}
 				else if(strcmp(tk->stt.tag_name, "title") == 0)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+
+					if(apply_foster_parenting)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
@@ -5238,7 +5262,15 @@ void in_head_mode(const token *tk)
 					//follow the generic raw text element parsing algorithm on p676
 
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
+
+					if(apply_foster_parenting)
+					{
+						add_child_to_foster_parent(o_e_stack, (node *)e);
+					}
+					else
+					{
+						add_child_node(current_node, (node *)e);
+					}
 
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
@@ -5261,8 +5293,9 @@ void in_head_mode(const token *tk)
 				else if(strcmp(tk->stt.tag_name, "script") == 0)
 				{
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
-					add_child_node(current_node, (node *)e);
 
+					add_child_node(current_node, (node *)e);
+					
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 
