@@ -236,6 +236,12 @@ unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
 			}
 			else
 			{
+				if((charset != NULL) && (strcasecmp(charset, "utf-16") == 0))
+				{
+					free(charset);
+					charset = strdup("utf-8");
+				}
+
 				return charset;
 			}
 
