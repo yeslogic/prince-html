@@ -10,6 +10,7 @@
 #include "util.h"
 #include "format.h"
 #include "foreign.h"
+#include "template.h"
 
 
 
@@ -98,32 +99,6 @@ typedef enum {
 	NOT_REPROCESS
 } token_process_type;
 
-
-typedef enum {
-	INITIAL,
-	BEFORE_HTML,
-	BEFORE_HEAD,
-	IN_HEAD,
-	IN_HEAD_NOSCRIPT,
-	AFTER_HEAD,
-	IN_BODY,
-	TEXT,
-	IN_TABLE,
-	IN_TABLE_TEXT,
-	IN_CAPTION,
-	IN_COLUMN_GROUP,
-	IN_TABLE_BODY,
-	IN_ROW,
-	IN_CELL,
-	IN_SELECT,
-	IN_SELECT_IN_TABLE,
-	AFTER_BODY,
-	IN_FRAMESET,
-	AFTER_FRAMESET,
-	AFTER_AFTER_BODY,
-	AFTER_AFTER_FRAMESET,
-	NUM_INSERTION_MODES
-} insertion_mode;
 
 
 typedef enum {
@@ -246,6 +221,7 @@ void in_row_mode(const token *tk);
 void in_cell_mode(const token *tk);
 void in_select_mode(const token *tk);
 void in_select_in_table_mode(const token *tk);
+void in_template_mode(const token *tk);
 void after_body_mode(const token *tk);
 void in_frameset_mode(const token *tk);
 void after_frameset_mode(const token *tk);
@@ -377,6 +353,7 @@ void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (const token *tk) 
 	in_cell_mode,
 	in_select_mode,
 	in_select_in_table_mode,
+	in_template_mode,
 	after_body_mode,
 	in_frameset_mode,
 	after_frameset_mode,
@@ -389,12 +366,14 @@ void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (const token *tk) 
 
 tokenization_state current_state;
 insertion_mode original_insertion_mode;
+insertion_mode current_template_insertion_mode;
 insertion_mode current_mode;
 element_node *current_node;
 element_node *context_node = NULL;
 element_node *form_element_ptr = NULL, *head_element_ptr = NULL;
 active_formatting_list *active_formatting_elements = NULL;
 element_stack *o_e_stack = NULL;
+mode_stack *m_stack = NULL;
 
 character_consumption_type character_consumption = NOT_RECONSUME;
 token_process_type token_process = NOT_REPROCESS;
@@ -464,6 +443,7 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 	assert(context != NULL);
 
 	o_e_stack = NULL;
+	m_stack = NULL;
 
 	doc_root = create_element_node("DOC", NULL, HTML);
 	html_node = create_element_node("html", NULL, HTML);
@@ -527,6 +507,7 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 void html_parse_memory(unsigned char *file_buffer, long buffer_length, node **root_ptr, token **doctype_ptr)
 {
 	o_e_stack = NULL;
+	m_stack = NULL;
 	context_node = NULL;
 
 	//create a document root element
@@ -5295,7 +5276,7 @@ void in_head_mode(const token *tk)
 					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
 
 					add_child_node(current_node, (node *)e);
-					
+
 					open_element_stack_push(&o_e_stack, e); 
 					current_node = open_element_stack_top(o_e_stack);
 
@@ -5303,11 +5284,28 @@ void in_head_mode(const token *tk)
 					original_insertion_mode = current_mode;
 					current_mode = TEXT;
 				}
+				else if(strcmp(tk->stt.tag_name, "template") == 0)
+				{
+					element_node *e = create_element_node(tk->stt.tag_name, tk->stt.attributes, HTML);
+
+					add_child_node(current_node, (node *)e);
+
+					open_element_stack_push(&o_e_stack, e); 
+					current_node = open_element_stack_top(o_e_stack);
+
+					active_formatting_elements = active_formatting_list_add_marker(active_formatting_elements);
+
+					current_mode = IN_TEMPLATE;
+			
+					mode_stack_push(&m_stack, IN_TEMPLATE);
+					current_template_insertion_mode = mode_stack_top(m_stack);
+					
+				}
 				else if(strcmp(tk->stt.tag_name, "head") == 0)
 				{
 					//parse error
 					//ignore the token
-					;
+					parse_error(UNEXPECTED_START_TAG, line_number);
 				}
 				else
 				{
@@ -5336,6 +5334,37 @@ void in_head_mode(const token *tk)
 
 					current_mode = AFTER_HEAD;
 					token_process = REPROCESS;
+				}
+				else if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					//if there is no template element on the stack of open elements, 
+					//then this is a parse error; ignore the token.
+					if(get_node_by_name(o_e_stack, "template") == NULL)
+					{
+						//parse error, ignore the token.
+						parse_error(UNEXPECTED_END_TAG, line_number);
+					}
+					else
+					{
+						current_node = generate_implied_end_tags(&o_e_stack, NULL);
+
+						if(strcmp(current_node->name, "template") != 0)
+						{
+							//parse error
+							parse_error(UNEXPECTED_END_TAG, line_number);
+						}
+						
+						pop_elements_up_to(&o_e_stack, "template");
+						current_node = open_element_stack_top(o_e_stack);
+
+						//clear the list of active formatting elements up to the last marker:
+						active_formatting_elements = clear_list_up_to_last_marker(active_formatting_elements);
+
+						mode_stack_pop(&m_stack);
+
+						current_mode = reset_insertion_mode(o_e_stack);
+
+					}
 				}
 				else if(strcmp(tk->ett.tag_name, "head") == 0)
 				{
@@ -5582,6 +5611,7 @@ void after_head_mode(const token *tk)
 				else if((strcmp(tk->stt.tag_name, "noframes") == 0) ||
 						(strcmp(tk->stt.tag_name, "script") == 0) ||
 						(strcmp(tk->stt.tag_name, "style") == 0) ||
+						(strcmp(tk->stt.tag_name, "template") == 0) ||
 						(strcmp(tk->stt.tag_name, "title") == 0))
 				{
 					//parse error
@@ -5640,6 +5670,10 @@ void after_head_mode(const token *tk)
 
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
+				}
+				else if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					in_head_mode(tk);
 				}
 				else
 				{
@@ -5867,28 +5901,36 @@ void in_body_mode(const token *tk)
 					//parse error
 					parse_error(UNEXPECTED_START_TAG, line_number);
 
-					//For each attribute on the token, check to see if the attribute 
-					//is already present on the top element of the stack of open elements . 
-					//If it is not, add the attribute and its corresponding value to that element
-					html_node = get_node_by_name(o_e_stack, "html");
-
-					if(html_node != NULL)
+					//If there is a template element in the stack of open elements, then ignore the token.
+					if(get_node_by_name(o_e_stack, "template") != NULL)
 					{
-						attribute_list *temp_ptr = tk->stt.attributes;
+						; 
+					}
+					else
+					{
+						//For each attribute on the token, check to see if the attribute 
+						//is already present on the top element of the stack of open elements . 
+						//If it is not, add the attribute and its corresponding value to that element
+						html_node = get_node_by_name(o_e_stack, "html");
 
-						while(temp_ptr != NULL)
+						if(html_node != NULL)
 						{
-							if((temp_ptr->name != NULL) && (temp_ptr->value != NULL))
-							{
-								//if attribute on token is not already present in html_node->attributes:
-								if(attribute_name_in_list(temp_ptr->name, html_node->attributes) == 0)
-								{
-									html_node->attributes = 
-										html_attribute_list_cons(temp_ptr->name, temp_ptr->value, temp_ptr->attr_ns, html_node->attributes);
-								}
-							}
+							attribute_list *temp_ptr = tk->stt.attributes;
 
-							temp_ptr = temp_ptr->tail;
+							while(temp_ptr != NULL)
+							{
+								if((temp_ptr->name != NULL) && (temp_ptr->value != NULL))
+								{
+									//if attribute on token is not already present in html_node->attributes:
+									if(attribute_name_in_list(temp_ptr->name, html_node->attributes) == 0)
+									{
+										html_node->attributes = 
+											html_attribute_list_cons(temp_ptr->name, temp_ptr->value, temp_ptr->attr_ns, html_node->attributes);
+									}
+								}
+
+								temp_ptr = temp_ptr->tail;
+							}
 						}
 					}
 					
@@ -5901,6 +5943,7 @@ void in_body_mode(const token *tk)
 						(strcmp(tk->stt.tag_name, "noframes") == 0) ||
 						(strcmp(tk->stt.tag_name, "script") == 0) ||
 						(strcmp(tk->stt.tag_name, "style") == 0) ||
+						(strcmp(tk->stt.tag_name, "template") == 0) ||
 						(strcmp(tk->stt.tag_name, "title") == 0))
 				{
 					//Process the token using the rules for the "in head" insertion mode.
@@ -5908,29 +5951,43 @@ void in_body_mode(const token *tk)
 				}
 				else if(strcmp(tk->stt.tag_name, "body") == 0)
 				{
-					//set the frameset-ok flag to "not ok"
-					//for each attribute on the token, check to see if the attribute is already present
-					//on the body element if it is not, add the attribute and its corresponding value to that element.
-					element_node *body_node = get_node_by_name(o_e_stack, "body");
-					attribute_list *curr_token_attrs = tk->stt.attributes;
+					//If the second element on the stack of open elements is not a body element, 
+					//if the stack of open elements has only one node on it, 
+					//or if there is a template element on the stack of open elements, 
+					//then ignore the token. (fragment case)
 
-					//parse error
-					parse_error(UNEXPECTED_START_TAG, line_number);
-
-					if(body_node != NULL)
+					if(((o_e_stack != NULL) && (o_e_stack->tail == NULL)) 
+					   ||
+					   (get_node_by_name(o_e_stack, "template") != NULL))
 					{
-						while(curr_token_attrs != NULL)
+						;	//ignore the token
+					}
+					else
+					{
+						//set the frameset-ok flag to "not ok"
+						//for each attribute on the token, check to see if the attribute is already present
+						//on the body element if it is not, add the attribute and its corresponding value to that element.
+						element_node *body_node = get_node_by_name(o_e_stack, "body");
+						attribute_list *curr_token_attrs = tk->stt.attributes;
+
+						//parse error
+						parse_error(UNEXPECTED_START_TAG, line_number);
+
+						if(body_node != NULL)
 						{
-							//if attribute on token is not already present in html_node->attributes:
-							if((curr_token_attrs->name != NULL) && (attribute_name_in_list(curr_token_attrs->name, body_node->attributes) == 0))
+							while(curr_token_attrs != NULL)
 							{
-								body_node->attributes = html_attribute_list_cons(curr_token_attrs->name, 
+								//if attribute on token is not already present in html_node->attributes:
+								if((curr_token_attrs->name != NULL) && (attribute_name_in_list(curr_token_attrs->name, body_node->attributes) == 0))
+								{
+									body_node->attributes = html_attribute_list_cons(curr_token_attrs->name, 
 																				 curr_token_attrs->value, 
 																				 curr_token_attrs->attr_ns,
 																				 body_node->attributes);
-							}
+								}
 
-							curr_token_attrs = curr_token_attrs->tail;
+								curr_token_attrs = curr_token_attrs->tail;
+							}
 						}
 					}
 
@@ -7021,6 +7078,10 @@ void in_body_mode(const token *tk)
 						token_process = REPROCESS;
 					}
 				}
+				else if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					in_head_mode(tk);
+				}
 				else if(strcmp(tk->ett.tag_name, "p") == 0)
 				{
 					element_node *match_node;
@@ -7407,7 +7468,18 @@ void in_body_mode(const token *tk)
 
 			break;
 		case TOKEN_EOF:
-			//stop parsing.
+			{
+				//if the stack of template insertion modes is not empty, 
+				//then process the token using the rules for the "in template" insertion mode.
+				if(m_stack != NULL)
+				{
+					in_template_mode(tk);
+				}
+				else
+				{
+					;//Otherwise, stop parsing.
+				}
+			}
 			break;
 		default:
 			break;
@@ -7656,7 +7728,8 @@ void in_table_mode(const token *tk)
 					}	
 				}
 				else if((strcmp(tk->stt.tag_name, "style") == 0) ||
-						(strcmp(tk->stt.tag_name, "script") == 0))
+						(strcmp(tk->stt.tag_name, "script") == 0) ||
+						(strcmp(tk->stt.tag_name, "template") == 0))
 				{
 					//Process the token using the rules for the "in head" insertion mode.
 					in_head_mode(tk);
@@ -7794,6 +7867,11 @@ void in_table_mode(const token *tk)
 				{
 					//parse error, ignore the token
 					parse_error(UNEXPECTED_END_TAG, line_number);
+				}
+				else if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					//Process the token using the rules for the "in head" insertion mode.
+					in_head_mode(tk);
 				}
 				else
 				{
@@ -8238,6 +8316,11 @@ void in_column_group_mode(const token *tk)
 
 					//Acknowledge the token's self-closing flag , if it is set.
 				}
+				else if(strcmp(tk->stt.tag_name, "template") == 0)
+				{
+					//Process the token using the rules for the "in head" insertion mode.
+					in_head_mode(tk);
+				}
 				else
 				{
 					//Act as if an end tag with the tag name "colgroup" had been seen, 
@@ -8279,6 +8362,11 @@ void in_column_group_mode(const token *tk)
 				{
 					//parse error, ignore the token
 					parse_error(UNEXPECTED_END_TAG, line_number);
+				}
+				else if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					//Process the token using the rules for the "in head" insertion mode.
+					in_head_mode(tk);
 				}
 				else
 				{
@@ -9032,7 +9120,8 @@ void in_select_mode(const token *tk)
 						//ignore the imagined end tag token (fragment case)
 					}
 				}
-				else if(strcmp(tk->stt.tag_name, "script") == 0)
+				else if((strcmp(tk->stt.tag_name, "script") == 0) ||
+					    (strcmp(tk->stt.tag_name, "template") == 0))
 				{
 					//Process the token using the rules for the "in head " insertion mode
 					in_head_mode(tk);
@@ -9147,6 +9236,11 @@ void in_select_mode(const token *tk)
 						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 				}
+				else if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					//Process the token using the rules for the "in head" insertion mode.
+					in_head_mode(tk);
+				}
 				else
 				{
 					//parse error, ignore the token
@@ -9258,6 +9352,151 @@ void in_select_in_table_mode(const token *tk)
 	}
 			
 }
+
+/*------------------------------------------------------------------------------------*/
+void in_template_mode(const token *tk)
+{
+	switch(tk->type)
+	{
+		case TOKEN_CHARACTER:
+			{
+				in_body_mode(tk);
+			}
+
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				in_body_mode(tk);
+			}
+
+			break;
+		case TOKEN_COMMENT:
+			{
+				in_body_mode(tk);
+			}
+
+			break;
+		case TOKEN_DOCTYPE:
+			{
+				in_body_mode(tk);
+			}
+
+			break;
+		case TOKEN_START_TAG:
+			{
+				if((strcmp(tk->stt.tag_name, "base") == 0) ||
+				   (strcmp(tk->stt.tag_name, "basefont") == 0) ||
+				   (strcmp(tk->stt.tag_name, "bgsound") == 0) ||
+				   (strcmp(tk->stt.tag_name, "link") == 0) ||
+				   (strcmp(tk->stt.tag_name, "meta") == 0) ||
+				   (strcmp(tk->stt.tag_name, "noframes") == 0) ||
+				   (strcmp(tk->stt.tag_name, "script") == 0) ||
+				   (strcmp(tk->stt.tag_name, "style") == 0) ||
+				   (strcmp(tk->stt.tag_name, "template") == 0) ||
+				   (strcmp(tk->stt.tag_name, "title") == 0))
+				{
+					in_head_mode(tk);
+				}
+				else if((strcmp(tk->stt.tag_name, "caption") == 0) ||
+					    (strcmp(tk->stt.tag_name, "colgroup") == 0) ||
+						(strcmp(tk->stt.tag_name, "tbody") == 0) ||
+						(strcmp(tk->stt.tag_name, "tfoot") == 0) ||
+						(strcmp(tk->stt.tag_name, "thead") == 0))
+				{
+					mode_stack_pop(&m_stack);
+					mode_stack_push(&m_stack, IN_TABLE);
+					current_template_insertion_mode = mode_stack_top(m_stack);
+					
+					current_mode = IN_TABLE;
+					token_process = REPROCESS;
+				}
+				else if(strcmp(tk->stt.tag_name, "col") == 0)
+				{
+					mode_stack_pop(&m_stack);
+					mode_stack_push(&m_stack, IN_COLUMN_GROUP);
+					current_template_insertion_mode = mode_stack_top(m_stack);
+
+					current_mode = IN_COLUMN_GROUP;
+					token_process = REPROCESS;
+				}
+				else if(strcmp(tk->stt.tag_name, "tr") == 0)
+				{
+					mode_stack_pop(&m_stack);
+					mode_stack_push(&m_stack, IN_TABLE_BODY);
+					current_template_insertion_mode = mode_stack_top(m_stack);
+					
+					current_mode = IN_TABLE_BODY;
+					token_process = REPROCESS;
+				}
+				else if((strcmp(tk->stt.tag_name, "td") == 0) ||
+						(strcmp(tk->stt.tag_name, "th") == 0))
+				{
+					mode_stack_pop(&m_stack);
+					mode_stack_push(&m_stack, IN_ROW);
+					current_template_insertion_mode = mode_stack_top(m_stack);
+						
+					current_mode = IN_ROW;
+					token_process = REPROCESS;
+				}
+				else	//any other start tag
+				{
+					mode_stack_pop(&m_stack);
+					mode_stack_push(&m_stack, IN_BODY);
+					current_template_insertion_mode = mode_stack_top(m_stack);
+						
+					current_mode = IN_BODY;
+					token_process = REPROCESS;
+				}
+			}
+
+			break;
+		case TOKEN_END_TAG:
+			{
+				if(strcmp(tk->ett.tag_name, "template") == 0)
+				{
+					in_head_mode(tk);
+				}
+				else	//any other end tag
+				{
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_TAG, line_number);
+				}
+			}
+
+			break;
+		case TOKEN_EOF:
+			{
+				if(get_node_by_name(o_e_stack, "template") == NULL)
+				{
+					;//stop parsing, fragment case
+				}
+				else
+				{
+					//parse error
+					parse_error(UNEXPECTED_END_OF_FILE, line_number);
+
+					pop_elements_up_to(&o_e_stack, "template");
+
+					active_formatting_elements = 
+							clear_list_up_to_last_marker(active_formatting_elements);
+
+					mode_stack_pop(&m_stack);
+
+					current_mode = reset_insertion_mode(o_e_stack);
+
+					token_process = REPROCESS;
+				}
+
+			}
+
+			break;
+		default:
+			break;
+
+
+	}
+}
+
 
 /*------------------------------------------------------------------------------------*/
 void after_body_mode(const token *tk)
@@ -9831,7 +10070,7 @@ void after_after_frameset_mode(const token *tk)
 }
 
 
-/*------------------------------------------------------------------------------------*/	
+/*------------------------------------------------------------------------------------*/
 /*use this function in non-fragment cases*/
 insertion_mode reset_insertion_mode(element_stack *st)
 {
@@ -9872,9 +10111,24 @@ insertion_mode reset_insertion_mode(element_stack *st)
 		{
 			return IN_TABLE;
 		}
+		else if(strcmp(temp_element->name, "template") == 0)
+		{
+			//return current_template_insertion_mode;
+			if(m_stack != NULL)
+			{
+				return mode_stack_top(m_stack);
+			}
+			else
+			{
+				return IN_TEMPLATE;
+			}
+			//hopefully, whenever there is a "template" element in
+			//in the stack of open elements, m_stack will never be
+			//NULL. But we do not want to risk it. So we test m_stack for NULL to be safe.
+		}
 		else if(strcmp(temp_element->name, "head") == 0)
 		{
-			return IN_BODY;
+			return IN_HEAD;
 		}
 		else if(strcmp(temp_element->name, "body") == 0)
 		{
@@ -9929,6 +10183,13 @@ insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name
 	else if(strcmp(context_element_name, "table") == 0)
 	{
 		return IN_TABLE;
+	}
+	else if(strcmp(context_element_name, "template") == 0)
+	{
+		mode_stack_push(&m_stack, IN_TEMPLATE);
+		current_template_insertion_mode = mode_stack_top(m_stack);
+
+		return current_template_insertion_mode;
 	}
 	else if(strcmp(context_element_name, "head") == 0)
 	{

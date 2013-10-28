@@ -448,7 +448,8 @@ void add_child_to_foster_parent(element_stack *o_e_st, node *child_node)
 
 
 /*-----------------------------------------------------------------*/
-//function returns the first "table" element seen on the stack, or the "html" element if no "table" is found.
+//function returns the first "table" or "template"element seen on the stack, 
+//or the "html" element if neither of them is found.
 //it is unlikely to return a NULL. (no need for caller to check for NULL return value)
 element_node *back_to_table_context(element_stack **st_ptr)
 {
@@ -458,7 +459,8 @@ element_node *back_to_table_context(element_stack **st_ptr)
 	{
 		temp_element_node = open_element_stack_top(*st_ptr);
 
-		if((strcmp(temp_element_node->name, "table") == 0)||
+		if((strcmp(temp_element_node->name, "table") == 0) ||
+		   (strcmp(temp_element_node->name, "template") == 0) ||
 		   (strcmp(temp_element_node->name, "html") == 0))
 		{
 			return temp_element_node;
@@ -474,7 +476,7 @@ element_node *back_to_table_context(element_stack **st_ptr)
 
 
 /*-----------------------------------------------------------------*/
-//function returns the first "tbody", "tfoot", or "thead" element seen on the stack. 
+//function returns the first "tbody", "tfoot", "thead" or "template" element seen on the stack. 
 //or the "html" element if none of the above elements is found.
 //it is unlikely to return a NULL. (no need for caller to check for NULL return value)
 element_node *back_to_table_body_context(element_stack **st_ptr)
@@ -488,6 +490,7 @@ element_node *back_to_table_body_context(element_stack **st_ptr)
 		if((strcmp(temp_element_node->name, "tbody") == 0)||
 		   (strcmp(temp_element_node->name, "tfoot") == 0)||
 		   (strcmp(temp_element_node->name, "thead") == 0)||
+		   (strcmp(temp_element_node->name, "template") == 0)||
 		   (strcmp(temp_element_node->name, "html") == 0))
 		{
 			return temp_element_node;
@@ -502,7 +505,8 @@ element_node *back_to_table_body_context(element_stack **st_ptr)
 }
 
 /*-----------------------------------------------------------------*/
-//function returns the first "tr" element seen on the stack. or the "html" element, if no "tr" element is found.
+//function returns the first "tr" or "template" element seen on the stack,
+//or the "html" element, if neither element is found.
 //it is unlikely to return a NULL. (no need for caller to check for NULL return value)
 element_node *back_to_table_row_context(element_stack **st_ptr)
 {
@@ -512,7 +516,8 @@ element_node *back_to_table_row_context(element_stack **st_ptr)
 	{
 		temp_element_node = open_element_stack_top(*st_ptr);
 
-		if((strcmp(temp_element_node->name, "tr") == 0)||
+		if((strcmp(temp_element_node->name, "tr") == 0) ||
+		   (strcmp(temp_element_node->name, "template") == 0) ||
 		   (strcmp(temp_element_node->name, "html") == 0))
 		{
 			return temp_element_node;
