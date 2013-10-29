@@ -9372,18 +9372,82 @@ void in_template_mode(const token *tk)
 			break;
 		case TOKEN_COMMENT:
 			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+
+
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+
 				in_body_mode(tk);
 			}
 
 			break;
 		case TOKEN_DOCTYPE:
 			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+
+
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+
 				in_body_mode(tk);
 			}
 
 			break;
 		case TOKEN_START_TAG:
 			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+
+
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+
+
 				if((strcmp(tk->stt.tag_name, "base") == 0) ||
 				   (strcmp(tk->stt.tag_name, "basefont") == 0) ||
 				   (strcmp(tk->stt.tag_name, "bgsound") == 0) ||
@@ -9452,6 +9516,28 @@ void in_template_mode(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
+				{
+					text_node *t = (text_node *)current_node->last_child;
+
+					//copy text_chunk from file buffer to text_buffer:
+					if((text_chunk != NULL) && (text_char_count > 0))
+					{
+						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+					}
+					text_chunk = NULL;
+					text_char_count = 0;
+
+
+					if(text_buffer != NULL)
+					{
+						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
+						free(text_buffer);
+						text_buffer = NULL;
+					}
+				}
+
+
 				if(strcmp(tk->ett.tag_name, "template") == 0)
 				{
 					in_head_mode(tk);
