@@ -116,6 +116,7 @@ token *create_eof_token(void);
 
 void free_token(token *tk);
 void free_attributes(attribute_list *list);
+attribute_list *clone_attributes(attribute_list *list);
 
 token *html_token_list_get_first_token(token_list *tk_list);
 token_list *html_token_list_get_tail(token_list *tk_list);

@@ -166,6 +166,36 @@ void free_attributes(attribute_list *list)
 	}
 }
 /*-------------------------------------------------------------*/
+attribute_list *clone_attributes(attribute_list *list)
+{
+	attribute_list *clone;
+	attribute_list *new_node, *last_node;
+
+	clone = NULL;
+	while(list != NULL)
+	{	
+		new_node = (attribute_list *)malloc(sizeof(attribute_list));
+		
+		new_node->name = strdup(list->name);
+		new_node->value = strdup(list->value);
+		new_node->attr_ns = list->attr_ns ;
+		new_node->tail = NULL;
+
+		if(clone == NULL)
+		{
+			clone = new_node;
+		}
+		else
+		{
+			last_node->tail = new_node;
+		}
+		last_node = new_node;
+		
+		list = list->tail ;
+	}
+	return clone;
+}
+/*-------------------------------------------------------------*/
 /*add the name-value pair to the end of attr_list*/
 attribute_list *html_attribute_list_cons(unsigned char *name, 
 										 unsigned char *value,

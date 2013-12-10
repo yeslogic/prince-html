@@ -381,7 +381,7 @@ element_node *reconstruct_active_formatting_elements(active_formatting_list *lis
 		{
 			entry_element = entry->formatting_element;	//"entry" could not be a marker, so this could not be NULL.
 
-			new_element = create_element_node(entry_element->name, entry_element->attributes, entry_element->name_space);
+			new_element = create_element_node(entry_element->name, clone_attributes(entry_element->attributes), entry_element->name_space);
 
 			//Append new element to the current node and push it onto the stack of open elements so that it is the new current node .
 			add_child_node(curr_node, (node *)new_element);
@@ -628,7 +628,7 @@ void adoption_agency_algorithm(active_formatting_list **list_ptr, element_stack 
 					}
 					else
 					{
-						new_element = create_element_node(this_node->name, this_node->attributes, this_node->name_space);
+						new_element = create_element_node(this_node->name, clone_attributes(this_node->attributes), this_node->name_space);
 									
 						//replace entry for this_node with the new_element in the list of active formatting elements.
 						//this_node must be in the list of active formatting elements, at this point.
@@ -675,7 +675,7 @@ void adoption_agency_algorithm(active_formatting_list **list_ptr, element_stack 
 
 				//Create an element for the token for which the formatting element was created.
 				new_element_for_formatting_ele = create_element_node(formatting_ele->name, 
-																	  formatting_ele->attributes, 
+																	  clone_attributes(formatting_ele->attributes), 
 																	  formatting_ele->name_space);
 
 				//Take all of the child nodes of the furthest block and append them to the element created.
