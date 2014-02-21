@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2014 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -204,29 +204,29 @@ void cdata_section_state_s68(unsigned char *ch);
 
 /*---------------------TREE CONSTRUCTION FUNCTIONS------------------------*/
 /*------------------------------------------------------------------------*/
-void initial_mode(const token *tk);
-void before_html_mode(const token *tk);
-void before_head_mode(const token *tk);
-void in_head_mode(const token *tk);
-void in_head_noscript_mode(const token *tk);
-void after_head_mode(const token *tk);
-void in_body_mode(const token *tk);
-void text_mode(const token *tk);
-void in_table_mode(const token *tk);
-void in_table_text_mode(const token *tk);
-void in_caption_mode(const token *tk);
-void in_column_group_mode(const token *tk);
-void in_table_body_mode(const token *tk);
-void in_row_mode(const token *tk);
-void in_cell_mode(const token *tk);
-void in_select_mode(const token *tk);
-void in_select_in_table_mode(const token *tk);
-void in_template_mode(const token *tk);
-void after_body_mode(const token *tk);
-void in_frameset_mode(const token *tk);
-void after_frameset_mode(const token *tk);
-void after_after_body_mode(const token *tk);
-void after_after_frameset_mode(const token *tk);
+void initial_mode(token *tk);
+void before_html_mode(token *tk);
+void before_head_mode(token *tk);
+void in_head_mode(token *tk);
+void in_head_noscript_mode(token *tk);
+void after_head_mode(token *tk);
+void in_body_mode(token *tk);
+void text_mode(token *tk);
+void in_table_mode(token *tk);
+void in_table_text_mode(token *tk);
+void in_caption_mode(token *tk);
+void in_column_group_mode(token *tk);
+void in_table_body_mode(token *tk);
+void in_row_mode(token *tk);
+void in_cell_mode(token *tk);
+void in_select_mode(token *tk);
+void in_select_in_table_mode(token *tk);
+void in_template_mode(token *tk);
+void after_body_mode(token *tk);
+void in_frameset_mode(token *tk);
+void after_frameset_mode(token *tk);
+void after_after_body_mode(token *tk);
+void after_after_frameset_mode(token *tk);
 
 /*------------------------------------------------------------------------*/
 
@@ -243,12 +243,11 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 insertion_mode reset_insertion_mode(element_stack *st);
 insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name);
 
-void parse_token_in_foreign_content(const token *tk);
+void parse_token_in_foreign_content(token *tk);
 void process_trailing_text(void);
 void process_trailing_comment(void);
 void process_token(token *tk);
 void process_eof(void);
-void copy_text_chunk(void);
 void append_null_replacement(void);
 void append_null_replacement_for_attribute_value(void);
 
@@ -335,7 +334,7 @@ void (*const tokeniser_state_functions [NUM_TOKENIZATION_STATES]) (unsigned char
 
 /*-------------------TREE CONSTRUCTION STATE MACHINE----------------------*/
 /*------------------------------------------------------------------------*/
-void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (const token *tk) = {
+void (*const tree_cons_state_functions [NUM_INSERTION_MODES]) (token *tk) = {
 	initial_mode,
 	before_html_mode,
 	before_head_mode,
@@ -379,29 +378,29 @@ character_consumption_type character_consumption = NOT_RECONSUME;
 token_process_type token_process = NOT_REPROCESS;
 
 token *curr_token = NULL;		//instantiate a token object and free that object after it is processed;
+token *multi_char = NULL;
 attribute_list *curr_token_attr_list = NULL;
 unsigned char *curr_attr_name = NULL;
 unsigned char *curr_attr_value = NULL;
-unsigned char *temp_buf;
 unsigned char *last_start_tag_name = NULL;
+unsigned char *pending_table_characters = NULL;
 	
 int apply_foster_parenting = 0;	//(1 - apply foster parenting, 0 - not apply foster parenting)
 int previous_attribute_value_state_bookmark = 0;
 //(1 - ATTRIBUTE_VALUE_DOUBLE_QUOTED_STATE, 2 - ATTIBUTE_VALUE_SINGLE_QUOTED_STATE, 3 - ATTRIBUTE_VALUE_UNQUOTED_STATE)
 
-unsigned char *text_chunk = NULL;
-unsigned char *text_buffer = NULL;
 
 unsigned char *attr_value_chunk = NULL;
 
 long attr_value_char_count = 0;
-long text_char_count = 0;
 
 long curr_buffer_index;
 long buffer_len;
 unsigned char *file_buf = NULL;
 
 unsigned long line_number = 1;
+unsigned long end_tag_name_len = 0;
+unsigned char *temp_tag_name = NULL;
 
 int character_skip = 0;
 
@@ -542,7 +541,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 
 	assert(file_buffer != NULL);
 
-	/*----------------- initialize global variable ------------------------------*/
+	/*----------------- initialize global variables ------------------------------*/
 
 	current_node = starting_node;
 	current_state = starting_state;
@@ -559,24 +558,23 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	token_process = NOT_REPROCESS;
 
 	curr_token = NULL;
+	multi_char = NULL;
 	curr_token_attr_list = NULL;
 	curr_attr_name = NULL;
 	curr_attr_value = NULL;
-	temp_buf = NULL;
 	last_start_tag_name = NULL;
+	pending_table_characters = NULL;
 	
 	apply_foster_parenting = 0;
 	previous_attribute_value_state_bookmark = 0;
 
-	text_chunk = NULL;
-	text_buffer = NULL;
-
 	attr_value_chunk = NULL;
 
 	attr_value_char_count = 0;
-	text_char_count = 0;
 
 	line_number = 1;
+	end_tag_name_len = 0;
+	temp_tag_name = NULL;
 
 	character_skip = 0;
 
@@ -647,40 +645,50 @@ void data_state_s1(unsigned char *ch)
 
 	if(c == AMPERSAND)
 	{
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);	
+			multi_char = NULL;
+		}
+
 		current_state = CHARACTER_REFERENCE_IN_DATA_STATE;
 	}
 	else if( c == LESS_THAN_SIGN)
 	{
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);		
+			multi_char = NULL;
+		}
+
 		current_state = TAG_OPEN_STATE;
 	}
 	else if( c == NULL_CHARACTER)
 	{
 		//parse error, emit the current input character as a character token.
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
-		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
+
+		if(multi_char != NULL)
 		{
-				//copy the text from file buffer to text_buffer:
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+			process_token(multi_char);		
+			multi_char = NULL;
 		}
+		//The NULL character is not emitted here, as it would be ignored in in_body_mode().
 
-		text_chunk = NULL;
-		text_char_count = 0;
-
-		//The NULL character is not emitted here, as it would be ignored in in_body_mode(). 
 	}
 	else
 	{
-		if(text_char_count == 0)	//only send the first character in a chunk of text
+		if(multi_char == NULL)
 		{
-			text_chunk = ch;
-			text_char_count = 1;
-			process_token(create_character_token(c));
-			return;
+			multi_char = create_multi_char_token(ch, 1);
+
 		}
-		else	//increment the text_char_count for the subsequent characters in the chunk of text
+		else
 		{
-			text_char_count += 1;
+			multi_char->mcht.char_count += 1;
+
 		}
+		
 	}
 	
 }
@@ -705,39 +713,20 @@ void character_reference_in_data_state_s2(unsigned char *ch)
 		character_consumption = RECONSUME;
 
 		//not a character reference, so treat it as normal text.
-		if(text_char_count == 0)	//no text before '&'
-		{
-			text_chunk = (ch - 1);
-			text_char_count = 1;
+		//create a multi_char starting at '&'
+		multi_char = create_multi_char_token((ch - 1), 1);
 
-			process_token(create_character_token(AMPERSAND));
-			return;	
-		}
-		else	//there is text before '&'
-		{
-			text_char_count += 1;
-			return;
-		}
+		return;
+		
 	}
-	else	//copy text_chunk to text_buffer, copy char_ref to text_buffer, and start another text chunk.
-	{	
-		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the character reference
-		{
-				//copy the text from file buffer to text_buffer:
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-
-		text_chunk = NULL;
-		text_char_count = 0;
-
-
-		text_buffer = string_n_append(text_buffer, char_ref, strlen(char_ref));
+	else
+	{
+		multi_char = create_multi_char_token(char_ref, strlen(char_ref));
+		process_token(multi_char);	
+		multi_char = NULL;
 
 		character_skip = chars_consumed - 1;
 
-		//only necessary if the character reference is at the beginning of the text node.
-		//send a char token to the tree construction to get a text node created and added to the tree.
-		process_token(create_character_token(char_ref[0]));
 		free(char_ref);
 		return;
 	}
@@ -750,33 +739,48 @@ void rcdata_state_s3(unsigned char *ch)
 
 	if(c == AMPERSAND)
 	{
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);		
+			multi_char = NULL;
+		}
+
 		current_state = CHARACTER_REFERENCE_IN_RCDATA_STATE;
 	}
 	else if(c == LESS_THAN_SIGN)
-	{
+	{	
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);		
+			multi_char = NULL;
+		}
+
 		current_state = RCDATA_LESS_THAN_SIGN_STATE;
 	}
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);		
+			multi_char = NULL;
+		}
+
 		append_null_replacement();
-		return;
 	}
 	else
 	{
-		if(text_char_count == 0)	//only send the first character in a chunk of text
+		if(multi_char == NULL)
 		{
-			text_chunk = ch;
-			text_char_count = 1;
+			multi_char = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			multi_char->mcht.char_count += 1;
+		}
 
-			process_token(create_character_token(c));
-			return;
-		}
-		else	//increment the text_char_count for the subsequent characters in the chunk of text
-		{
-			text_char_count += 1;
-		}
 	}
 
 }
@@ -799,42 +803,18 @@ void character_reference_in_rcdata_state_s4(unsigned char *ch)
 	{
 		character_consumption = RECONSUME;
 
-		//not a character reference, so treat it as normal text.
-		if(text_char_count == 0)	//no text before '&'
-		{
-			text_chunk = (ch - 1);
-			text_char_count = 1;
-			//return html_token_list_cons(create_character_token(AMPERSAND), NULL);
-			process_token(create_character_token(AMPERSAND));
-			return;
-		}
-		else	//there is text before '&'
-		{
-			text_char_count += 1;
-			return;
-		}
+		multi_char = create_multi_char_token((ch - 1), 1);
 
 	}
-	else	//copy text_chunk to text_buffer, copy char_ref to text_buffer, and start another text chunk.
-	{	
-		if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the character reference
-		{
-			//copy the text from file buffer to text_buffer:
-			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-
-		text_chunk = NULL;
-		text_char_count = 0;
-
-		text_buffer = string_n_append(text_buffer, char_ref, strlen(char_ref));
+	else	
+	{
+		multi_char = create_multi_char_token(char_ref, strlen(char_ref));
+		process_token(multi_char);
+		multi_char = NULL;
 
 		character_skip = chars_consumed - 1;
-
-		//only necessary if the character reference is at the beginning of the text node.
-		//send a char token to the tree construction to get a text node created and added to the tree.
-		process_token(create_character_token(char_ref[0]));
+	
 		free(char_ref);
-		return;
 	}
 }
 
@@ -847,29 +827,38 @@ void rawtext_state_s5(unsigned char *ch)
 
 	if(c == LESS_THAN_SIGN)
 	{
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);		
+			multi_char = NULL;
+		}
+
 		current_state = RAWTEXT_LESS_THAN_SIGN_STATE;
 	}
 	else if(c == NULL_CHARACTER)
 	{
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);		
+			multi_char = NULL;
+		}
+
 		append_null_replacement();
-		return;
 	}
 	else
 	{
-		if(text_char_count == 0)	//only send the first character in a chunk of text
+		if(multi_char == NULL)
 		{
-			text_chunk = ch;
-			text_char_count = 1;
-	
-			process_token(create_character_token(c));
-			return;
+			multi_char = create_multi_char_token(ch, 1);
 		}
-		else	//increment the text_char_count for the subsequent characters in the chunk of text
+		else
 		{
-			text_char_count += 1;
+			multi_char->mcht.char_count += 1;
 		}
+		
 	}
 
 }
@@ -883,47 +872,39 @@ void script_data_state_s6(unsigned char *ch)
 
 	if(c == LESS_THAN_SIGN)
 	{
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);	
+			multi_char = NULL;
+		}
+
 		current_state = SCRIPT_DATA_LESS_THAN_SIGN_STATE;
 	}
 	else if(c == NULL_CHARACTER)
 	{
-		unsigned char byte_seq[5];
-		int i, len;
-
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
-		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
-
-		for(i = 0; i < len; i++)
+		if(multi_char != NULL)
 		{
-			process_token(create_character_token(byte_seq[i]));
+			process_token(multi_char);		
+			multi_char = NULL;
 		}
-		return;
+
+		append_null_replacement();
+
 	}
 	else
 	{
-		unsigned char *curr_ch = ch;
-		long curr_ch_index = curr_buffer_index;
-		long ch_count = 0;
-
-		while((*curr_ch != LESS_THAN_SIGN) && (*curr_ch != NULL_CHARACTER) && (curr_ch_index < buffer_len))
+		if(multi_char == NULL)
 		{
-			curr_ch_index += 1;
-			curr_ch += 1;
-			ch_count += 1;
-
-			if(*curr_ch == LINE_FEED)
-			{
-				line_number += 1;
-			}
+			multi_char = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			multi_char->mcht.char_count += 1;
 		}
 
-		//the value of ch_count must be at least 1, having come out of the while loop.
-		character_skip = ch_count - 1;
-		process_token(create_multi_char_token(ch, ch_count));
-		return;
 	}
 }
 
@@ -937,24 +918,27 @@ void plaintext_state_s7(unsigned char *ch)
 	{
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
+
+		if(multi_char != NULL)
+		{
+			process_token(multi_char);			
+			multi_char = NULL;
+		}
+
 		append_null_replacement();
-		return;
 
 	}
 	else
 	{
-		if(text_char_count == 0)	//only send the first character in a chunk of text
+		if(multi_char == NULL)
 		{
-			text_chunk = ch;
-			text_char_count = 1;
+			multi_char = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			multi_char->mcht.char_count += 1;
+		}
 
-			process_token(create_character_token(c));
-			return;
-		}
-		else	//increment the text_char_count for the subsequent characters in the chunk of text
-		{
-			text_char_count += 1;
-		}
 	}
 
 }
@@ -1002,18 +986,10 @@ void tag_open_state_s8(unsigned char *ch)
 		character_consumption = RECONSUME;
 
 
-		if(text_char_count == 0)	//no text before '<'
-		{
-			text_chunk = (ch - 1);		//mark the beginning of text at '<'
-			text_char_count = 1;
+		//not a valid tag, or comment, or DOCTYPE. Treat it as text.
+		//create a multi_char starting at '<'
+		multi_char = create_multi_char_token((ch - 1), 1);
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else		//there is text before '<'
-		{
-			text_char_count += 1;		//extend the existing text before '<'
-		}
 	}
 
 }
@@ -1042,18 +1018,6 @@ void end_tag_open_state_s9(unsigned char *ch)
 		//parse error
 		parse_error(EMPTY_END_TAG, line_number);
 		//skip the following three characters: "</>", totally ignore them.
-
-		//------------------------------
-		if((text_chunk != NULL) && (text_char_count > 0))
-		{
-			//copy the text from file buffer to text_buffer:
-			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-
-		//reset global variables: (to start another chunk of text)
-		text_chunk = NULL;
-		text_char_count = 0;
-		//------------------------------
 
 		current_state = DATA_STATE;
 	}
@@ -1172,10 +1136,8 @@ void rcdata_less_than_sign_state_s11(unsigned char *ch)
 	
 	if (c == SOLIDUS)
 	{
-		free(temp_buf);
-		temp_buf = NULL;
+		end_tag_name_len = 0;
 
-		temp_buf = string_append(NULL, '\0');
 		current_state = RCDATA_END_TAG_OPEN_STATE;
 	}
 	else
@@ -1184,18 +1146,8 @@ void rcdata_less_than_sign_state_s11(unsigned char *ch)
 		character_consumption = RECONSUME;
 
 		//not an end tag, so treat it as text.
-		if(text_char_count == 0)
-		{
-			text_chunk = (ch - 1);		//make the beginning of text at '<'.
-			text_char_count = 1;
+		multi_char = create_multi_char_token((ch - 1), 1);
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else
-		{
-			text_char_count += 1;		//extend the existing text before '<'.
-		}
 	}
 
 }
@@ -1211,13 +1163,15 @@ void rcdata_end_tag_open_state_s12(unsigned char *ch)
 		c = c + CAPITAL_TO_SMALL;
 		
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+		
 		current_state = RCDATA_END_TAG_NAME_STATE;
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+		
 		current_state = RCDATA_END_TAG_NAME_STATE;
 	}
 	else
@@ -1225,20 +1179,9 @@ void rcdata_end_tag_open_state_s12(unsigned char *ch)
 		current_state = RCDATA_STATE;
 		character_consumption = RECONSUME;
 
-
 		//invalid tag name,  so treat it as text.
-		if(text_char_count == 0)	//no text before '<'
-		{
-			text_chunk = (ch - 2);	 //mark the beginning of the text at '<', so jump back two chars.
-			text_char_count = 2;
+		multi_char = create_multi_char_token((ch - 2), 2);
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else	//there is text before '<'
-		{
-			text_char_count += 2;	//extend the text by two chars.
-		}
 	}
 
 }
@@ -1257,43 +1200,18 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 		//to make sure attributes are not added to an end tag.
 		if((last_start_tag_name != NULL) && (strcmp(curr_token->ett.tag_name, last_start_tag_name) == 0))
 		{
-			free(temp_buf);
-			temp_buf = NULL;
+			end_tag_name_len = 0;
 			current_state = BEFORE_ATTRIBUTE_NAME_STATE;
 		}
 		else
 		{
-			int len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-			//free memory
-			free(temp_buf);
-			temp_buf = NULL;
-
 			current_state = RCDATA_STATE;
 			character_consumption = RECONSUME;
 
 			//not an appropriate RCDATA end tag, so treat it as text.
-			if(text_char_count == 0)	//no text before '<'
-			{
-				text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-				text_char_count = len + 2;
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
-				process_token(create_character_token(LESS_THAN_SIGN));
-				return;
-			}
-			else	//there is text before '<'
-			{
-				text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-			}
 		}
 	}
 	else if(c == SOLIDUS)
@@ -1302,52 +1220,26 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 		{
 			//it is safe to switch to self_closing_start_tag_state.
 			//there are checks to ensure attributes are NOT added and self_closing_flag is NOT set for end tags.
-			free(temp_buf);
-			temp_buf = NULL;
+
+			end_tag_name_len = 0;
 			current_state = SELF_CLOSING_START_TAG_STATE;
 		}
 		else
 		{
-			int len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-			//free memory
-			free(temp_buf);
-			temp_buf = NULL;
-
 			current_state = RCDATA_STATE;
 			character_consumption = RECONSUME;
 
 			//invalid RCDATA end tag, so treat it as text.
-			if(text_char_count == 0)	//no text before '<'
-			{
-				text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-				text_char_count = len + 2;
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
-				process_token(create_character_token(LESS_THAN_SIGN));
-				return;
-			}
-			else	//there is text before '<'
-			{
-				text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-			}
-		
 		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		if((last_start_tag_name != NULL) && (strcmp(curr_token->ett.tag_name, last_start_tag_name) == 0))
 		{
-			free(temp_buf);
-			temp_buf = NULL;
+			end_tag_name_len = 0;
 			current_state = DATA_STATE;
 
 			process_token(curr_token);
@@ -1356,37 +1248,12 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 		}
 		else
 		{
-			int len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-			//free memory
-			free(temp_buf);
-			temp_buf = NULL;
-
 			current_state = RCDATA_STATE;
 			character_consumption = RECONSUME;
 
 			//not an appropriate RCDATA end tag, so treat it as text.
-			if(text_char_count == 0)	//no text before '<'
-			{
-				text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-				text_char_count = len + 2;
-
-				process_token(create_character_token(LESS_THAN_SIGN));
-				return;
-			}
-			else	//there is text before '<'
-			{
-				text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-			}
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
 		}
 	}
@@ -1394,48 +1261,23 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 	{
 		c = c + CAPITAL_TO_SMALL;
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+		
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+		
 	}
 	else
 	{
-		int len;
-			
-		if(temp_buf != NULL)
-		{
-			len = strlen(temp_buf);
-		}
-		else
-		{
-			len = 0;
-		}
-
-		//free memory
-		free(temp_buf);
-		temp_buf = NULL;
-
-
 		current_state = RCDATA_STATE;
 		character_consumption = RECONSUME;
 
 		//invalid RCDATA end tag, so treat it as text.
-		if(text_char_count == 0)	//no text before '<'
-		{
-			text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-			text_char_count = len + 2;
-
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else	//there is text before '<'
-		{
-			text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-		}
-
+		multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+		end_tag_name_len = 0;
 
 	}
 
@@ -1449,10 +1291,7 @@ void rawtext_less_than_sign_state_s14(unsigned char *ch)
 
 	if(c == SOLIDUS)
 	{
-		free(temp_buf);
-		temp_buf = NULL;
-		temp_buf = string_append(NULL, '\0');
-
+		end_tag_name_len = 0;
 		current_state = RAWTEXT_END_TAG_OPEN_STATE;
 	}
 	else
@@ -1462,18 +1301,7 @@ void rawtext_less_than_sign_state_s14(unsigned char *ch)
 
 
 		//not an end tag, so treat it as text.
-		if(text_char_count == 0)
-		{
-			text_chunk = (ch - 1);		//make the beginning of text at '<'.
-			text_char_count = 1;
-
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else
-		{
-			text_char_count += 1;		//extend the existing text before '<'.
-		}
+		multi_char = create_multi_char_token((ch - 1), 1);
 
 	}
 
@@ -1491,13 +1319,15 @@ void rawtext_end_tag_open_state_s15(unsigned char *ch)
 		c = c + CAPITAL_TO_SMALL;
 		
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+		
 		current_state = RAWTEXT_END_TAG_NAME_STATE;
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+		
 		current_state = RAWTEXT_END_TAG_NAME_STATE;
 	}
 	else
@@ -1508,18 +1338,8 @@ void rawtext_end_tag_open_state_s15(unsigned char *ch)
 
 
 		//invalid tag name,  so treat it as text.
-		if(text_char_count == 0)	//no text before '<'
-		{
-			text_chunk = (ch - 2);	 //mark the beginning of the text at '<', so jump back two chars.
-			text_char_count = 2;
+		multi_char = create_multi_char_token((ch - 2), 2);
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else	//there is text before '<'
-		{
-			text_char_count += 2;	//extend the text by two chars.
-		}
 	}
 
 }
@@ -1539,46 +1359,17 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 			//if it is an appropriate end tag, switch to the before attribute name state.
 			//it is safe to do so, as there are checks in "before attribute name state"
 			//to make sure attributes are not added to an end tag.
-
-			free(temp_buf);
-			temp_buf = NULL;
+			
+			end_tag_name_len = 0;
 			current_state = BEFORE_ATTRIBUTE_NAME_STATE;
 		}
 		else
 		{
-			/*----------------------------*/
-			int len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-			//free memory
-			free(temp_buf);
-			temp_buf = NULL;
-
 			current_state = RAWTEXT_STATE;
 			character_consumption = RECONSUME;
 
-
-			if(text_char_count == 0)	//no text before '<'
-			{
-				text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-				text_char_count = len + 2;
-
-				process_token(create_character_token(LESS_THAN_SIGN));
-				return;
-			}
-			else	//there is text before '<'
-			{
-				text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-			}
-			/*----------------------------*/
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
 		}
 	}
@@ -1588,45 +1379,18 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 		{
 			//it is safe to switch to self_closing_start_tag_state.
 			//there are checks to ensure attributes are NOT added to and self_closing_flag is NOT set for end tags.
-			free(temp_buf);
-			temp_buf = NULL;
+
+			end_tag_name_len = 0;
 			current_state = SELF_CLOSING_START_TAG_STATE;
 		}
 		else
 		{
-			/*----------------------------*/
-			int len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-			//free memory
-			free(temp_buf);
-			temp_buf = NULL;
 
 			current_state = RAWTEXT_STATE;
 			character_consumption = RECONSUME;
 
-
-			if(text_char_count == 0)	//no text before '<'
-			{
-				text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-				text_char_count = len + 2;
-
-				process_token(create_character_token(LESS_THAN_SIGN));	
-				return;
-			}
-			else	//there is text before '<'
-			{
-				text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-			}
-			/*----------------------------*/
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 		
 		}
 	}
@@ -1634,8 +1398,7 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 	{
 		if((last_start_tag_name != NULL) && (strcmp(curr_token->ett.tag_name, last_start_tag_name) == 0))
 		{
-			free(temp_buf);
-			temp_buf = NULL;
+			end_tag_name_len = 0;
 			current_state = DATA_STATE;
 
 			process_token(curr_token);
@@ -1645,87 +1408,36 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 		else
 		{
 			//not an appropriate RAWTEXT end tag, so treat it as text.
-			/*----------------------------*/
-			int len;
 			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-			//free memory
-			free(temp_buf);
-			temp_buf = NULL;
-
 			current_state = RAWTEXT_STATE;
 			character_consumption = RECONSUME;
 
-
-			if(text_char_count == 0)	//no text before '<'
-			{
-				text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-				text_char_count = len + 2;
-
-				process_token(create_character_token(LESS_THAN_SIGN));
-				return;
-			}
-			else	//there is text before '<'
-			{
-				text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-			}
-			/*----------------------------*/
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
+			
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+
 	}
 	else
 	{
-		/*----------------------------*/
-		int len;
-			
-		if(temp_buf != NULL)
-		{
-			len = strlen(temp_buf);
-		}
-		else
-		{
-			len = 0;
-		}
-
-		//free memory
-		free(temp_buf);
-		temp_buf = NULL;
-
 		current_state = RAWTEXT_STATE;
 		character_consumption = RECONSUME;
 
-		//invalid RAWTEXT end tag, so treat it as text.
-		if(text_char_count == 0)	//no text before '<'
-		{
-			text_chunk = (ch - 2 - len);		//mark the beginning of text at '<'.
-			text_char_count = len + 2;
+		multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+		end_tag_name_len = 0;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			return;
-		}
-		else	//there is text before '<'
-		{
-			text_char_count += (len + 2);		//extend the existing text before '<' by (len + 2) chars.
-		}
-		/*----------------------------*/
 	}
 
 }
@@ -1738,18 +1450,14 @@ void script_data_less_than_sign_state_s17(unsigned char *ch)
 
 	if(c == SOLIDUS)
 	{
-		free(temp_buf);
-		temp_buf = NULL;
-		temp_buf = string_append(NULL, '\0');
+		end_tag_name_len = 0;
 		current_state = SCRIPT_DATA_END_TAG_OPEN_STATE;
 	}
 	else if(c == EXCLAMATION_MARK)
 	{
 		current_state = SCRIPT_DATA_ESCAPE_START_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(EXCLAMATION_MARK));
-		return;
+		process_token(create_multi_char_token("<!", 2));
 
 	}
 	else
@@ -1757,8 +1465,8 @@ void script_data_less_than_sign_state_s17(unsigned char *ch)
 		character_consumption = RECONSUME;
 		current_state = SCRIPT_DATA_STATE;
 	
-		process_token(create_character_token(LESS_THAN_SIGN));
-		return;
+		process_token(create_multi_char_token("<", 1));
+
 	}
 
 }
@@ -1774,13 +1482,15 @@ void script_data_end_tag_open_state_s18(unsigned char *ch)
 		c = c + CAPITAL_TO_SMALL;
 
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+		
 		current_state = SCRIPT_DATA_END_TAG_NAME_STATE;
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+		
 		current_state = SCRIPT_DATA_END_TAG_NAME_STATE;
 	}
 	else
@@ -1788,9 +1498,7 @@ void script_data_end_tag_open_state_s18(unsigned char *ch)
 		character_consumption = RECONSUME;
 		current_state = SCRIPT_DATA_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(SOLIDUS));
-		return;
+		process_token(create_multi_char_token("</", 2));
 
 	}
 
@@ -1802,7 +1510,6 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 {
 	unsigned char c = *ch;
 
-
 	//character tabulation, line feed, form feed, space
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
@@ -1812,39 +1519,17 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			//it is safe to do so, as there are checks in "before attribute name state"
 			//to make sure attributes are not added to an end tag.
 
-			free(temp_buf);
-			temp_buf = NULL;
+			end_tag_name_len = 0;
 			current_state = BEFORE_ATTRIBUTE_NAME_STATE;
 		}
 		else
-		{			
-			int i, len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
+		{
 			current_state = SCRIPT_DATA_STATE;
 			character_consumption = RECONSUME;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			process_token(create_character_token(SOLIDUS));
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
-		
-			for(i = 0; i < len; i++)
-			{
-				process_token(create_character_token(temp_buf[i]));
-			}
-
-			free(temp_buf);
-			temp_buf = NULL;
-		
-			return;
 		}
 	}
 	else if(c == SOLIDUS)
@@ -1853,48 +1538,25 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 		{
 			//it is safe to switch to self_closing_start_tag_state.
 			//there are checks to ensure attributes are NOT added to and self_closing_flag is NOT set for end tags.
-			free(temp_buf);
-			temp_buf = NULL;
+			
+			end_tag_name_len = 0;
 			current_state = SELF_CLOSING_START_TAG_STATE;
 		}
 		else
 		{
-			int i, len;
-
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
-
 			current_state = SCRIPT_DATA_STATE;
 			character_consumption = RECONSUME;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			process_token(create_character_token(SOLIDUS));
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
-		
-			for(i = 0; i < len; i++)
-			{
-				process_token(create_character_token(temp_buf[i]));
-			}
-
-			free(temp_buf);
-			temp_buf = NULL;
-		
-			return;
 		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		if((last_start_tag_name != NULL) && (strcmp(curr_token->ett.tag_name, last_start_tag_name) == 0))
 		{
-			free(temp_buf);
-			temp_buf = NULL;
+			end_tag_name_len = 0;
 			current_state = DATA_STATE;
 			
 			process_token(curr_token);
@@ -1903,75 +1565,35 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 		}
 		else
 		{
-			int i, len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
 			current_state = SCRIPT_DATA_STATE;
 			character_consumption = RECONSUME;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			process_token(create_character_token(SOLIDUS));
+			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+			end_tag_name_len = 0;
 
-		
-			for(i = 0; i < len; i++)
-			{
-				process_token(create_character_token(temp_buf[i]));
-			}
-
-			free(temp_buf);
-			temp_buf = NULL;
-		
-			return;
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+		
 	}
 	else
 	{
-		int i, len;
-			
-		if(temp_buf != NULL)
-		{
-			len = strlen(temp_buf);
-		}
-		else
-		{
-			len = 0;
-		}
-
 		current_state = SCRIPT_DATA_STATE;
 		character_consumption = RECONSUME;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(SOLIDUS));
+		multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
+		end_tag_name_len = 0;
 
-		
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(temp_buf[i]));
-		}
-
-		free(temp_buf);
-		temp_buf = NULL;
-		
-		return;
 	}
 
 }
@@ -1986,8 +1608,8 @@ void script_data_escape_start_state_s20(unsigned char *ch)
 	{
 		current_state = SCRIPT_DATA_ESCAPE_START_DASH_STATE;
 
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
+
 	}
 	else
 	{
@@ -2007,8 +1629,7 @@ void script_data_escape_start_dash_state_s21(unsigned char *ch)
 	{
 		current_state = SCRIPT_DATA_ESCAPED_DASH_DASH_STATE;
 
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
 	}
 	else
 	{
@@ -2028,8 +1649,8 @@ void script_data_escaped_state_s22(unsigned char *ch)
 	{
 		current_state = SCRIPT_DATA_ESCAPED_DASH_STATE;
 
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
+
 	}
 	else if(c == LESS_THAN_SIGN)
 	{
@@ -2039,25 +1660,21 @@ void script_data_escaped_state_s22(unsigned char *ch)
 	{
 		//return replacement_for_null_char();
 		unsigned char byte_seq[5];
-		int i, len;
+		//int i, len;
 
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		//len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(byte_seq[i]));
-		}
-		return;
-
+		process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
+		
 	}
 	else
 	{
-		process_token(create_character_token(c));
-		return;
+		process_token(create_multi_char_token(ch, 1));
+
 	}
 
 }
@@ -2072,8 +1689,8 @@ void script_data_escaped_dash_state_s23(unsigned char *ch)
 	{
 		current_state = SCRIPT_DATA_ESCAPED_DASH_DASH_STATE;
 
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
+		
 	}
 	else if(c == LESS_THAN_SIGN)
 	{
@@ -2082,7 +1699,7 @@ void script_data_escaped_dash_state_s23(unsigned char *ch)
 	else if( c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
-		int i, len;
+		//int i, len;
 
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
@@ -2090,21 +1707,17 @@ void script_data_escaped_dash_state_s23(unsigned char *ch)
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		//len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(byte_seq[i]));
-		}
-		return;
+		process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
 
 	}
 	else
 	{
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 
-		process_token(create_character_token(c));
-		return;
+		process_token(create_multi_char_token(ch, 1));
+		
 	}
 
 }
@@ -2117,8 +1730,8 @@ void script_data_escaped_dash_dash_state_s24(unsigned char *ch)
 	
 	if(c == HYPHEN_MINUS)
 	{
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
+
 	}
 	else if(c == LESS_THAN_SIGN)
 	{
@@ -2128,13 +1741,12 @@ void script_data_escaped_dash_dash_state_s24(unsigned char *ch)
 	{
 		current_state = SCRIPT_DATA_STATE;
 
-		process_token(create_character_token(GREATER_THAN_SIGN));
-		return;
+		process_token(create_multi_char_token(">", 1));
 	}
 	else if( c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
-		int i, len;
+		//int i, len;
 
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
@@ -2142,21 +1754,15 @@ void script_data_escaped_dash_dash_state_s24(unsigned char *ch)
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		//len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(byte_seq[i]));
-		}
-		return;
-
+		process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
 	}
 	else
 	{
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 
-		process_token(create_character_token(c));
-		return;
+		process_token(create_multi_char_token(ch, 1));
 	}
 
 }
@@ -2170,39 +1776,36 @@ void script_data_escaped_less_than_sign_state_s25(unsigned char *ch)
 
 	if(c == SOLIDUS)
 	{
-		free(temp_buf);
-		temp_buf = NULL;
-		temp_buf = string_append(NULL, '\0');
+		end_tag_name_len = 0;
 		current_state = SCRIPT_DATA_ESCAPED_END_TAG_OPEN_STATE;
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 
-		free(temp_buf);
-		temp_buf = NULL;
-		temp_buf = string_append(NULL, '\0');
-		temp_buf = string_append(temp_buf, c);
+		free(temp_tag_name);
+		temp_tag_name = NULL;
+		temp_tag_name = string_append(NULL, '\0');
+		temp_tag_name = string_append(temp_tag_name, c);
 
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPE_START_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(*ch));
-		return;
+		//emit the previous character('<') and the current character.
+		process_token(create_multi_char_token((ch - 1), 2));
 
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
-		free(temp_buf);
-		temp_buf = NULL;
-		temp_buf = string_append(NULL, '\0');
-		temp_buf = string_append(temp_buf, c);
+	
+		free(temp_tag_name);
+		temp_tag_name = NULL;
+		temp_tag_name = string_append(NULL, '\0');
+		temp_tag_name = string_append(temp_tag_name, c);
 
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPE_START_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(*ch));
-		return;
+		//emit the previous character('<') and the current character.
+		process_token(create_multi_char_token((ch - 1), 2));
 
 	}
 	else
@@ -2210,8 +1813,8 @@ void script_data_escaped_less_than_sign_state_s25(unsigned char *ch)
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 		character_consumption = RECONSUME;
 		
-		process_token(create_character_token(LESS_THAN_SIGN));
-		return;
+		process_token(create_multi_char_token("<", 1));
+
 	}
 
 }
@@ -2228,23 +1831,24 @@ void script_data_escaped_end_tag_open_state_s26(unsigned char *ch)
 		c = c + CAPITAL_TO_SMALL;
 
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
+
 		current_state = SCRIPT_DATA_ESCAPED_END_TAG_NAME_STATE;
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token = create_end_tag_token(c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len = 1;
 		current_state = SCRIPT_DATA_ESCAPED_END_TAG_NAME_STATE;
+
 	}
 	else
 	{
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 		character_consumption = RECONSUME;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(SOLIDUS));
-		return;
+		//invalid script data escaped end tag. Treat it as text.("</")
+		process_token(create_multi_char_token("</", 2));
 
 	}
 
@@ -2256,7 +1860,6 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 {
 	unsigned char c = *ch;
 
-
 	//character tabulation, line feed, form feed, space
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
@@ -2267,39 +1870,19 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 			//it is safe to do so, as there are checks in "before attribute name state"
 			//to make sure attributes are not added to an end tag.
 
-			free(temp_buf);
-			temp_buf = NULL;
+			end_tag_name_len = 0;
+
 			current_state = BEFORE_ATTRIBUTE_NAME_STATE;
 		}
 		else
 		{
-			int i, len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
 			current_state = SCRIPT_DATA_ESCAPED_STATE;
 			character_consumption = RECONSUME;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			process_token(create_character_token(SOLIDUS));
+			//treat everyting from '<' as text
+			process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
+			end_tag_name_len = 0;
 
-		
-			for(i = 0; i < len; i++)
-			{
-				process_token(create_character_token(temp_buf[i]));
-			}
-
-			free(temp_buf);
-			temp_buf = NULL;
-		
-			return;
 		}
 	}
 	else if(c == SOLIDUS)
@@ -2309,39 +1892,19 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 		{
 			//it is safe to switch to self_closing_start_tag_state.
 			//there are checks to ensure attributes are NOT added to and self_closing_flag is NOT set for end tags.
-			free(temp_buf);
-			temp_buf = NULL;
+			
+			end_tag_name_len = 0;
 			current_state = SELF_CLOSING_START_TAG_STATE;
 		}
 		else
 		{
-			int i, len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
 			current_state = SCRIPT_DATA_ESCAPED_STATE;
 			character_consumption = RECONSUME;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			process_token(create_character_token(SOLIDUS));
+			//treat everyting from '<' as text
+			process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
+			end_tag_name_len = 0;
 
-
-			for(i = 0; i < len; i++)
-			{
-				process_token(create_character_token(temp_buf[i]));
-			}
-
-			free(temp_buf);
-			temp_buf = NULL;
-		
-			return;
 		}
 
 	}
@@ -2349,8 +1912,8 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 	{
 		if((last_start_tag_name != NULL) && (strcmp(curr_token->ett.tag_name, last_start_tag_name) == 0))
 		{
-			free(temp_buf);
-			temp_buf = NULL;
+			//an appropriate end tag </script> ends the whole script. <!--xyzabc</script>
+			end_tag_name_len = 0;
 			current_state = DATA_STATE;
 
 			process_token(curr_token);
@@ -2359,75 +1922,37 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 		}
 		else
 		{
-			int i, len;
-			
-			if(temp_buf != NULL)
-			{
-				len = strlen(temp_buf);
-			}
-			else
-			{
-				len = 0;
-			}
-
 			current_state = SCRIPT_DATA_ESCAPED_STATE;
 			character_consumption = RECONSUME;
 
-			process_token(create_character_token(LESS_THAN_SIGN));
-			process_token(create_character_token(SOLIDUS));
+			//treat everyting from '<' as text
+			process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
+			end_tag_name_len = 0;
 
-		
-			for(i = 0; i < len; i++)
-			{
-				process_token(create_character_token(temp_buf[i]));
-			}
-
-			free(temp_buf);
-			temp_buf = NULL;
-		
-			return;
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+		
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
 		curr_token->ett.tag_name = string_append(curr_token->ett.tag_name, c);
-		temp_buf = string_append(temp_buf, *ch);
+		end_tag_name_len += 1;
+		
 	}
 	else
 	{
-		int i, len;
-			
-		if(temp_buf != NULL)
-		{
-			len = strlen(temp_buf);
-		}
-		else
-		{
-			len = 0;
-		}
-
 		current_state = SCRIPT_DATA_ESCAPED_STATE;
 		character_consumption = RECONSUME;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		process_token(create_character_token(SOLIDUS));
+		//treat everyting from '<' as text
+		process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
+		end_tag_name_len = 0;
 
-		
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(temp_buf[i]));
-		}
-
-		free(temp_buf);
-		temp_buf = NULL;
-		
-		return;
 	}
 
 }
@@ -2441,7 +1966,7 @@ void script_data_double_escape_start_state_s28(unsigned char *ch)
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) || (c == SPACE)
 			|| (c == SOLIDUS) || (c == GREATER_THAN_SIGN))
 	{
-		if((temp_buf != NULL) && (strcmp(temp_buf, "script") == 0))
+		if((temp_tag_name != NULL) && (strcmp(temp_tag_name, "script") == 0))
 		{
 			current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 		}
@@ -2449,28 +1974,28 @@ void script_data_double_escape_start_state_s28(unsigned char *ch)
 		{
 			current_state = SCRIPT_DATA_ESCAPED_STATE;
 		}
-		
-		process_token(create_character_token(c));
-		return;
 
+		free(temp_tag_name);
+		temp_tag_name = NULL;
+		
+		process_token(create_multi_char_token(ch, 1));
+		
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 		
-		temp_buf = string_append(temp_buf, c);
+		temp_tag_name = string_append(temp_tag_name, c);
 
-		process_token(create_character_token(*ch));
-		return;
+		process_token(create_multi_char_token(ch, 1));
 
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
-		temp_buf = string_append(temp_buf, *ch);
+		temp_tag_name = string_append(temp_tag_name, c);
 
-		process_token(create_character_token(*ch));
-		return;
-
+		process_token(create_multi_char_token(ch, 1));
+		
 	}
 	else
 	{
@@ -2489,41 +2014,33 @@ void script_data_double_escaped_state_s29(unsigned char *ch)
 	if(c == HYPHEN_MINUS)
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_DASH_STATE;
-		
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
 
+		process_token(create_multi_char_token("-", 1));
+	
 	}
 	else if(c == LESS_THAN_SIGN)
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_LESS_THAN_SIGN_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		return;
-
+		process_token(create_multi_char_token("<", 1));
 	}
 	else if( c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
-		int i, len;
+		//int i, len;
 
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		//len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(byte_seq[i]));
-		}
-		return;
-
+		process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
 	}
 	else
 	{
-		process_token(create_character_token(*ch));
-		return;
+		process_token(create_multi_char_token(ch, 1));
+		
 	}
 
 }
@@ -2538,20 +2055,18 @@ void script_data_double_escaped_dash_state_s30(unsigned char *ch)
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH_STATE;
 
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
 	}
 	else if(c == LESS_THAN_SIGN)
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_LESS_THAN_SIGN_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		return;
+		process_token(create_multi_char_token("<", 1));
 	}
 	else if( c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
-		int i, len;
+		//int i, len;
 
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
@@ -2559,20 +2074,16 @@ void script_data_double_escaped_dash_state_s30(unsigned char *ch)
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		//len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(byte_seq[i]));
-		}
-		return;
+		process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
+		
 	}
 	else
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 
-		process_token(create_character_token(*ch));
-		return;
+		process_token(create_multi_char_token(ch, 1));
 	}	
 
 }
@@ -2585,27 +2096,25 @@ void script_data_double_escaped_dash_dash_state_s31(unsigned char *ch)
 
 	if(c == HYPHEN_MINUS)
 	{
-		process_token(create_character_token(HYPHEN_MINUS));
-		return;
+		process_token(create_multi_char_token("-", 1));
 	}
 	else if(c == LESS_THAN_SIGN)
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_LESS_THAN_SIGN_STATE;
 
-		process_token(create_character_token(LESS_THAN_SIGN));
-		return;
+		process_token(create_multi_char_token("<", 1));
+		
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		current_state = SCRIPT_DATA_STATE;
 
-		process_token(create_character_token(GREATER_THAN_SIGN));
-		return;
+		process_token(create_multi_char_token(">", 1));
 	}
 	else if(c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
-		int i, len;
+		//int i, len;
 
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, line_number);
@@ -2613,20 +2122,17 @@ void script_data_double_escaped_dash_dash_state_s31(unsigned char *ch)
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
-		len = strlen(byte_seq);
+		//len = strlen(byte_seq);
 
-		for(i = 0; i < len; i++)
-		{
-			process_token(create_character_token(byte_seq[i]));
-		}
-		return;
+		process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
+
 	}
 	else
 	{
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 
-		process_token(create_character_token(*ch));
-		return;
+		process_token(create_multi_char_token(ch, 1));
+
 	}	
 	
 }
@@ -2639,13 +2145,14 @@ void script_data_double_escaped_less_than_sign_state_s32(unsigned char *ch)
 	
 	if(c == SOLIDUS)
 	{
-		free(temp_buf);
-		temp_buf = NULL;
-		temp_buf = string_append(NULL, '\0');
+		free(temp_tag_name);
+		temp_tag_name = NULL;
+		temp_tag_name = string_append(NULL, '\0');
+
 		current_state = SCRIPT_DATA_DOUBLE_ESCAPE_END_STATE;
 
-		process_token(create_character_token(SOLIDUS));
-		return;
+		process_token(create_multi_char_token("/", 1));
+
 	}
 	else
 	{
@@ -2664,7 +2171,7 @@ void script_data_double_escape_end_state_s33(unsigned char *ch)
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) || (c == SPACE)
 			|| (c == SOLIDUS) || (c == GREATER_THAN_SIGN))
 	{
-		if((temp_buf != NULL) && (strcmp(temp_buf, "script") == 0))
+		if((temp_tag_name != NULL) && (strcmp(temp_tag_name, "script") == 0))
 		{
 			current_state = SCRIPT_DATA_ESCAPED_STATE;
 		}
@@ -2672,25 +2179,25 @@ void script_data_double_escape_end_state_s33(unsigned char *ch)
 		{
 			current_state = SCRIPT_DATA_DOUBLE_ESCAPED_STATE;
 		}
+
+		process_token(create_multi_char_token(ch, 1));
 		
-		process_token(create_character_token(*ch));
-		return;
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 		
-		temp_buf = string_append(temp_buf, c);
+		temp_tag_name = string_append(temp_tag_name, c);
 
-		process_token(create_character_token(*ch));
-		return;
+		process_token(create_multi_char_token(ch, 1));
+
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
-		temp_buf = string_append(temp_buf, *ch);
+		temp_tag_name = string_append(temp_tag_name, c);
 
-		process_token(create_character_token(*ch));
-		return;
+		process_token(create_multi_char_token(ch, 1));
+
 	}
 	else
 	{
@@ -3702,7 +3209,6 @@ void bogus_comment_state_s44(unsigned char *ch)
 	
 	process_token(curr_token);
 	curr_token = NULL;
-	return;
 }
 
 
@@ -4704,21 +4210,15 @@ void cdata_section_state_s68(unsigned char *ch)
 	long i;
 	long temp_index = curr_buffer_index;
 	unsigned char *chunk_start;
-	unsigned char byte_seq[5];
-
-	//UTF-8 sequence for replacement char(0xFFFD)
-	utf8_byte_sequence(0xFFFD, byte_seq);
+	
 
 	current_state = DATA_STATE;
 
-
-	//if there is text before "<![CDATA[", copy it to the text_buffer:
-	if((text_chunk != NULL) && (text_char_count > 0))
+	if(multi_char != NULL)
 	{
-		text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
+		process_token(multi_char);			
+		multi_char = NULL;
 	}
-	text_chunk = NULL;
-	text_char_count = 0;
 
 
 	chunk_start = ch;
@@ -4737,11 +4237,9 @@ void cdata_section_state_s68(unsigned char *ch)
 		{
 			if(i > 0)
 			{
-				//copy i characters to text_buffer
-				text_buffer = string_n_append(text_buffer, chunk_start, i);
-				
-				//get a text node created and added to the tree.
-				process_token(create_character_token(*chunk_start));
+				//copy i characters to the text node
+				process_token(create_multi_char_token(chunk_start, i));
+
 			}
 
 			//skip total number of characters consumed, less one.
@@ -4756,13 +4254,10 @@ void cdata_section_state_s68(unsigned char *ch)
 			parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
 			//copy the chunk up to the NULL char
-			text_buffer = string_n_append(text_buffer, chunk_start, i);
+			process_token(create_multi_char_token(chunk_start, i));
 
-			//append the replacement character
-			text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
-
-			//get a text node created and added to the tree.
-			process_token(create_character_token(*chunk_start));
+			//append the replacement character to the text node
+			append_null_replacement();
 			
 			chunk_start += i + 1;
 
@@ -4779,8 +4274,8 @@ void cdata_section_state_s68(unsigned char *ch)
 	//we have not found the ending sequence "]]>", and reached the EOF.
 	//temp_index will be the index of either the last character or the second last character.
 
-	//copy the chunk up to (but not including) the character temp_index is pointing at.
-	text_buffer = string_n_append(text_buffer, chunk_start, i);
+	//copy the chunk up to (but not including) the character temp_index is pointing at, to the text node.
+	process_token(create_multi_char_token(chunk_start, i));
 
 	//copy the remaining characters up to the EOF
 	while(temp_index <= (buffer_len - 1))
@@ -4795,22 +4290,20 @@ void cdata_section_state_s68(unsigned char *ch)
 			//parse error
 			parse_error(NULL_CHARACTER_IN_TEXT, line_number);
 
-			//append the replacement character
-			text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
+			//append the replacement character to the text node.
+			append_null_replacement();
+
 		}
 		else
 		{
 			//append the character
-			text_buffer = string_n_append(text_buffer, (chunk_start + i), 1);
+			process_token(create_multi_char_token((chunk_start + i), 1));
+
 		}
 		
 		i += 1;
 		temp_index += 1;
 	}
-
-
-	//get a text node created and added to the tree.
-	process_token(create_character_token(*chunk_start));
 
 	//skip total number of characters consumed, less one.
 	character_skip = buffer_len - curr_buffer_index - 1;
@@ -4821,30 +4314,42 @@ void cdata_section_state_s68(unsigned char *ch)
 /*----------------------------------------------------------------------------*/
 
 /*------------------------------------------------------------------------------------*/
-void initial_mode(const token *tk)
+void initial_mode(token *tk)
 {
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
-				{
-					//ignore the token
-					//when chars are ignored, reset the text chunk variables
-					text_chunk = NULL;
-					text_char_count = 0;
-				}
-				else
-				{
-					//implementation pending
-					//set the document to quirks mode
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				long i;
 
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
+				{
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
+				}
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
+				{
+					//modify the multi-char token to point to the first non-space character.
+					tk->mcht.mch = tk->mcht.mch + i;
+					tk->mcht.char_count = tk->mcht.char_count - i;
+				
 					current_mode = BEFORE_HTML;
-					token_process = REPROCESS;	
+					token_process = REPROCESS;
 				}
 			}
 			break;
@@ -4894,27 +4399,43 @@ void initial_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void before_html_mode(const token *tk)
+void before_html_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				element_node *e;
+				long i;
+
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
-					//ignore the token
-					//when chars are ignored, reset the text chunk variables
-					text_chunk = NULL;
-					text_char_count = 0;
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
 				}
-				else
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
 				{
+					//modify the multi-char token to point to the first non-space character.
+					tk->mcht.mch = tk->mcht.mch + i;
+					tk->mcht.char_count = tk->mcht.char_count - i;
+
 					//create an html element, append it to the Document object, 
-					element_node *e = create_element_node("html", NULL, HTML);
+					e = create_element_node("html", NULL, HTML);
 					add_child_node(doc_root, (node *)e);	
 
 					open_element_stack_push(&o_e_stack, e);
@@ -4924,7 +4445,6 @@ void before_html_mode(const token *tk)
 					token_process = REPROCESS;
 				}
 			}
-
 			break;
 		case TOKEN_COMMENT:
 			//append comment node to Document object
@@ -5005,26 +4525,42 @@ void before_html_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void before_head_mode(const token *tk)
+void before_head_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				element_node *e;
+				long i;
+
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
-					//ignore the token
-					//when chars are ignored, reset the text chunk variables
-					text_chunk = NULL;
-					text_char_count = 0;
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
 				}
-				else
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
 				{
-					element_node *e = create_element_node("head", NULL, HTML);
+					//modify the multi-char token to point to the first non-space character.
+					tk->mcht.mch = tk->mcht.mch + i;
+					tk->mcht.char_count = tk->mcht.char_count - i;
+
+					e = create_element_node("head", NULL, HTML);
 					add_child_node(current_node, (node *)e);
 
 					open_element_stack_push(&o_e_stack, e);
@@ -5128,28 +4664,41 @@ void before_head_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_head_mode(const token *tk)
+void in_head_mode(token *tk)
 { 
 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
-				{
-					//insert the character into the current node
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				long i;
 
-					//we ignore them for now.
-					//when chars are ignored, reset the text chunk variables
-					text_chunk = NULL;
-					text_char_count = 0;
-				}
-				else
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
+				}
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
+				{
+					//modify the multi-char token to point to the first non-space character.
+					tk->mcht.mch = tk->mcht.mch + i;
+					tk->mcht.char_count = tk->mcht.char_count - i;
+
 					//Act as if an end tag token with the tag name "head" had been seen, 
 					//and reprocess the current token.
 
@@ -5161,7 +4710,6 @@ void in_head_mode(const token *tk)
 
 				}
 			}
-
 			break;
 		case TOKEN_COMMENT:
 			//append comment node to current node
@@ -5396,22 +4944,35 @@ void in_head_mode(const token *tk)
 
 }
 /*------------------------------------------------------------------------------------*/
-void in_head_noscript_mode(const token *tk)
+void in_head_noscript_mode(token *tk)
 {
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				long i;
+
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
-					//Process the token using the rules for the "in head " insertion mode
-					in_head_mode(tk);
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
 				}
-				else
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
 				{
 					//parse error
 					parse_error(UNEXPECTED_TEXT, line_number);
@@ -5421,6 +4982,12 @@ void in_head_noscript_mode(const token *tk)
 
 					current_mode = IN_HEAD;
 					token_process = REPROCESS;
+
+				}
+				else	//text contains only space characters
+				{
+					//Process the token using the rules for the "in head " insertion mode
+					in_head_mode(tk);
 				}
 			}
 			break;
@@ -5510,30 +5077,44 @@ void in_head_noscript_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_head_mode(const token *tk)
+void after_head_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
-				{
-					//insert the character into the current node (it should be the html element)
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				element_node *e;
+				long i;
 
-					//we ignore them for now
-					//when chars are ignored, reset the text chunk variables
-					text_chunk = NULL;
-					text_char_count = 0;
-				}
-				else
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
+				}
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
+				{
+					//modify the multi-char token to point to the first non-space character.
+					tk->mcht.mch = tk->mcht.mch + i;
+					tk->mcht.char_count = tk->mcht.char_count - i;	
+
 					//Act as if a start tag token with the tag name "body" and no attributes had been seen, then set the
 					//frameset-ok flag back to "ok", and then reprocess the current token.
-					element_node *e = create_element_node("body", NULL, HTML);
+					e = create_element_node("body", NULL, HTML);
 					add_child_node(current_node, (node *)e);
 
 					open_element_stack_push(&o_e_stack, e); 
@@ -5703,103 +5284,29 @@ void after_head_mode(const token *tk)
 
 /*------------------------------------------------------------------------------------*/
 /*=======================BEGINNING OF IN BODY MODE==================================*/
-void in_body_mode(const token *tk)
+void in_body_mode(token *tk)
 {
 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if(tk->cht.ch == NULL_CHARACTER)
-				{
-					//parse error, ignore the token
-					parse_error(NULL_CHARACTER_IN_TEXT, line_number);
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-				}
-				else if((tk->cht.ch == CHARACTER_TABULATION) ||
-						(tk->cht.ch == LINE_FEED) ||
-						(tk->cht.ch == FORM_FEED) ||
-						(tk->cht.ch == CARRIAGE_RETURN) ||
-						(tk->cht.ch == SPACE))
-				{
-					if(is_in_a_script_data_parsing_state())	//process script data in fragment case
-					{
-						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-						{
-							text_node *t = (text_node *)current_node->last_child;
-							t->text_data = string_append(t->text_data, tk->cht.ch);
-						}
-						else
-						{
-							text_node *t = create_text_node();
-							t->text_data = string_append(t->text_data, tk->cht.ch);
-							add_child_node(current_node, (node *)t);
-						}
-					}
-					else											//process normal text in body
-					{
-						//Reconstruct the active formatting elements , if any.
-						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
-
-						//insert the character into the current node
-						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-						{
-							;
-						}
-						else
-						{
-							text_node *t = create_text_node();		//create text node with empty string as data.
-							add_child_node(current_node, (node *)t);
-						}
-					}
-	
-				}
-				else
-				{
-					if(is_in_a_script_data_parsing_state())	//process script data in fragment case
-					{
-						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-						{
-							text_node *t = (text_node *)current_node->last_child;
-							t->text_data = string_append(t->text_data, tk->cht.ch);
-						}
-						else
-						{
-							text_node *t = create_text_node();
-							t->text_data = string_append(t->text_data, tk->cht.ch);
-							add_child_node(current_node, (node *)t);
-						}
-					}
-					else											//process normal text in body
-					{
-						//Reconstruct the active formatting elements , if any.
-						current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
-					
-						//Insert the token's character into the current node .
-						//Set the frameset-ok flag to "not ok".
-						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-						{
-							;
-						}
-						else
-						{
-							text_node *t = create_text_node();		//create text node with empty string as data.
-							add_child_node(current_node, (node *)t);
-						}
-					}
-				}
+				;
 			}
 			break;
 
-		case TOKEN_MULTI_CHAR:						//only the SCRIPT_DATA_STATE will produce this type of token
+		case TOKEN_MULTI_CHAR:
 			{
+				if(is_in_a_script_data_parsing_state())
+				{
+					;//processing script data in fragment case. Script data is processed in "TEXT" mode in document case.
+				}
+				else
+				{
+					//Reconstruct the active formatting elements , if any.
+					current_node = reconstruct_active_formatting_elements(active_formatting_elements, &o_e_stack);
+				}
+
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
 					text_node *t = (text_node *)current_node->last_child;
@@ -5818,81 +5325,19 @@ void in_body_mode(const token *tk)
 			{
 				comment_node *c;
 
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				c = create_comment_node(tk->cmt.comment);
 				add_child_node(current_node, (node *)c);
 			}
 			break;
+
 		case TOKEN_DOCTYPE:
 			//parse error
 			//ignore the token
 			parse_error(UNEXPECTED_DOCTYPE, line_number);
-
-			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-			}
 			break;
+
 		case TOKEN_START_TAG:
-			{	
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
+			{
 
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{	
@@ -7027,26 +6472,6 @@ void in_body_mode(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
 
 				if(strcmp(tk->ett.tag_name, "body") == 0)
 				{
@@ -7489,43 +6914,16 @@ void in_body_mode(const token *tk)
 
 /*=======================END OF IN BODY MODE==================================*/
 /*------------------------------------------------------------------------------------*/
-void text_mode(const token *tk)
+void text_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if(is_in_a_script_data_parsing_state())
-				{
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						text_node *t = (text_node *)current_node->last_child;
-						t->text_data = string_append(t->text_data, tk->cht.ch);
-					}
-					else
-					{
-						text_node *t = create_text_node();
-						t->text_data = string_append(t->text_data, tk->cht.ch);
-						add_child_node(current_node, (node *)t);
-					}
-				}
-				else
-				{
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						;
-					}
-					else
-					{
-						text_node *t = create_text_node();		//create text node with empty string as data.
-						add_child_node(current_node, (node *)t);
-					}
-				}
-				//note: if current node is 'textarea' ignore LINE_FEED characters at the beginning of text
-
+				;
 			}
 			break;
-		case TOKEN_MULTI_CHAR:						//only the SCRIPT_DATA_STATE will produce this type of token
+		case TOKEN_MULTI_CHAR:	
 			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
@@ -7542,41 +6940,10 @@ void text_mode(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if(strcmp(tk->ett.tag_name, "script") == 0)
-				{
-					open_element_stack_pop(&o_e_stack); 
-					current_node = open_element_stack_top(o_e_stack);
+				open_element_stack_pop(&o_e_stack); 
+				current_node = open_element_stack_top(o_e_stack);
+				current_mode = original_insertion_mode;
 
-					current_mode = original_insertion_mode;
-
-				}
-				else		//any other end tag
-				{
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						text_node *t = (text_node *)current_node->last_child;
-
-						//copy text_chunk from file buffer to text_buffer:
-						if((text_chunk != NULL) && (text_char_count > 0))
-						{
-							text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-						}
-						text_chunk = NULL;
-						text_char_count = 0;
-
-					
-						if(text_buffer != NULL)
-						{
-							t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-							free(text_buffer);
-							text_buffer = NULL;
-						}
-					}
-
-					open_element_stack_pop(&o_e_stack); 
-					current_node = open_element_stack_top(o_e_stack);
-					current_mode = original_insertion_mode;
-				}
 			}
 			break;
 		case TOKEN_EOF:
@@ -7597,12 +6964,17 @@ void text_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_table_mode(const token *tk)
+void in_table_mode(token *tk)
 { 
 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
+			{
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
 			{
 				original_insertion_mode = current_mode;
 				current_mode = IN_TABLE_TEXT;
@@ -7917,60 +7289,35 @@ void in_table_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_table_text_mode(const token *tk)
+void in_table_text_mode(token *tk)
 {
-	long i, buf_len;
+	long i, pending_chars_len;
 	text_node *t = NULL;
 
 	if(tk->type == TOKEN_CHARACTER)
 	{
-		/*
-		if(tk->cht.ch == NULL_CHARACTER)
-		{
-			;//parse error, ignore the token.
-		}
-		else
-		{
-			
-			pending_table_characters = string_append(pending_table_characters, tk->cht.ch);
-
-			if((tk->cht.ch != CHARACTER_TABULATION) &&
-			   (tk->cht.ch != LINE_FEED) &&
-			   (tk->cht.ch != FORM_FEED) &&
-			   (tk->cht.ch != CARRIAGE_RETURN) &&
-			   (tk->cht.ch != SPACE))
-			{
-				apply_foster_parenting = 1;
-			}
-		}
-		*/
 		;
+	}
+	else if(tk->type == TOKEN_MULTI_CHAR)
+	{
+		pending_table_characters = string_n_append(pending_table_characters, tk->mcht.mch, tk->mcht.char_count);
 	}
 	else
 	{	
-
-		//copy text_chunk from file buffer to text_buffer:
-		if((text_chunk != NULL) && (text_char_count > 0))
-		{
-			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-		text_chunk = NULL;
-		text_char_count = 0;
-
 	
-		if(text_buffer != NULL)
+		if(pending_table_characters != NULL)
 		{
 	
-			buf_len = strlen(text_buffer);
+			pending_chars_len = strlen(pending_table_characters);
 		
 			//check and see if foster parenting is to be applied:
-			for(i = 0; i < buf_len; i++)
+			for(i = 0; i < pending_chars_len; i++)
 			{
-				if((text_buffer[i] != CHARACTER_TABULATION) &&
-				   (text_buffer[i] != LINE_FEED) &&
-				   (text_buffer[i] != FORM_FEED) &&
-				   (text_buffer[i] != CARRIAGE_RETURN) &&
-				   (text_buffer[i] != SPACE))
+				if((pending_table_characters[i] != CHARACTER_TABULATION) &&
+				   (pending_table_characters[i] != LINE_FEED) &&
+				   (pending_table_characters[i] != FORM_FEED) &&
+				   (pending_table_characters[i] != CARRIAGE_RETURN) &&
+				   (pending_table_characters[i] != SPACE))
 				{
 					apply_foster_parenting = 1;
 					break;
@@ -7980,7 +7327,7 @@ void in_table_text_mode(const token *tk)
 
 			t = create_text_node();
 
-			t->text_data = string_n_append(t->text_data, text_buffer, buf_len);
+			t->text_data = string_n_append(t->text_data, pending_table_characters, pending_chars_len);
 			
 		
 			/*also need to check if the current_node is a "table", "tbody", "tfoot", "thead", or "tr" */
@@ -7998,7 +7345,7 @@ void in_table_text_mode(const token *tk)
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
 					text_node *t_node = (text_node *)current_node->last_child;
-					t_node->text_data = string_n_append(t_node->text_data, text_buffer, buf_len);
+					t_node->text_data = string_n_append(t_node->text_data, pending_table_characters, pending_chars_len);
 				}
 				else
 				{
@@ -8006,8 +7353,10 @@ void in_table_text_mode(const token *tk)
 				}
 			}
 
-			free(text_buffer);
-			text_buffer = NULL;
+			//free(text_buffer);
+			//text_buffer = NULL;
+			free(pending_table_characters);
+			pending_table_characters = NULL;
 
 
 			apply_foster_parenting = 0;
@@ -8022,7 +7371,7 @@ void in_table_text_mode(const token *tk)
 
 
 /*------------------------------------------------------------------------------------*/
-void in_caption_mode(const token *tk)
+void in_caption_mode(token *tk)
 { 
 
 	if((tk->type == TOKEN_START_TAG) &&
@@ -8045,27 +7394,7 @@ void in_caption_mode(const token *tk)
 		//if that token wasn't ignored, reprocess the current token.
 		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
-
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-					
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
+			
 			pop_elements_up_to(&o_e_stack, "caption");
 			current_node = open_element_stack_top(o_e_stack);
 
@@ -8077,16 +7406,6 @@ void in_caption_mode(const token *tk)
 		else
 		{
 			//ignore the token
-
-			//tag token is ignored, there may be more text after the ignored token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
-
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8096,26 +7415,7 @@ void in_caption_mode(const token *tk)
 
 		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-					
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
+	
 			//generate implied end tags
 			current_node = generate_implied_end_tags(&o_e_stack, NULL);
 
@@ -8137,15 +7437,6 @@ void in_caption_mode(const token *tk)
 			//parse error, ignore the token
 			parse_error(UNEXPECTED_END_TAG, line_number);
 
-			//tag token is ignored, there may be more text after the ignored token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
-
 		}
 
 	}
@@ -8162,26 +7453,7 @@ void in_caption_mode(const token *tk)
 
 		if(has_element_in_table_scope(o_e_stack, "caption", &match_node) == 1)
 		{
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-					
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
+	
 			pop_elements_up_to(&o_e_stack, "caption");
 			current_node = open_element_stack_top(o_e_stack);
 
@@ -8194,14 +7466,6 @@ void in_caption_mode(const token *tk)
 		{
 			//ignore the token
 
-			//tag token is ignored, there may be more text after the ignored token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8219,14 +7483,6 @@ void in_caption_mode(const token *tk)
 		//parse error, ignore the token
 		parse_error(UNEXPECTED_END_TAG, line_number);
 
-		//tag token is ignored, there may be more text after the ignored token
-		//copy text_chunk from file buffer to text_buffer:
-		if((text_chunk != NULL) && (text_char_count > 0))
-		{
-			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-		text_chunk = NULL;
-		text_char_count = 0;
 	}
 	else
 	{
@@ -8236,56 +7492,55 @@ void in_caption_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_column_group_mode(const token *tk)
+void in_column_group_mode(token *tk)
 {
 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-	
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
-				{
-					//insert the character into the current node
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				long i;
 
-					/*
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						text_node *t = (text_node *)current_node->last_child;
-						t->text_data = string_append(t->text_data, tk->cht.ch);
-					}
-					else
-					{
-						text_node *t = create_text_node();
-						t->text_data = string_append(t->text_data, tk->cht.ch);
-						add_child_node(current_node, (node *)t);
-					}
-					*/
-					text_chunk = NULL;
-					text_char_count = 0;
-				}
-				else
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
-					//Act as if an end tag with the tag name "colgroup" had been seen, 
-					//and then, if that token wasn't ignored, reprocess the current token.
-					if(strcmp(current_node->name, "html") == 0)
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
 					{
-						;//ignore the imagined end tag token "colgroup"
+						break;
+					}
+				}
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
+				{
+					if(strcmp(current_node->name, "colgroup") != 0)
+					{
+						//if the current node is not a colgroup element, then this is a parse error; ignore the token.
+						parse_error(UNEXPECTED_TEXT, line_number);
 					}
 					else
 					{
-						open_element_stack_pop(&o_e_stack); 
+						//modify the multi-char token to point to the first non-space character.
+						tk->mcht.mch = tk->mcht.mch + i;
+						tk->mcht.char_count = tk->mcht.char_count - i;
+				
+						open_element_stack_pop(&o_e_stack);
 						current_node = open_element_stack_top(o_e_stack);
 
 						current_mode = IN_TABLE;
 						token_process = REPROCESS;
 					}
 				}
-				
 			}
 			break;
 		case TOKEN_COMMENT:
@@ -8323,12 +7578,10 @@ void in_column_group_mode(const token *tk)
 				}
 				else
 				{
-					//Act as if an end tag with the tag name "colgroup" had been seen, 
-					//and then, if that token wasn't ignored, reprocess the current token.
-
-					if(strcmp(current_node->name, "html") == 0)
+					if(strcmp(current_node->name, "colgroup") != 0)
 					{
-						;//ignore the imagined end tag token "colgroup"
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_START_TAG, line_number);
 					}
 					else
 					{
@@ -8370,11 +7623,10 @@ void in_column_group_mode(const token *tk)
 				}
 				else
 				{
-					//Act as if an end tag with the tag name "colgroup" had been seen, 
-					//and then, if that token wasn't ignored, reprocess the current token.
-					if(strcmp(current_node->name, "html") == 0)
+					if(strcmp(current_node->name, "colgroup") != 0)
 					{
-						;//ignore the imagined end tag token "colgroup"
+						//parse error, ignore the token
+						parse_error(UNEXPECTED_END_TAG, line_number);
 					}
 					else
 					{
@@ -8389,11 +7641,10 @@ void in_column_group_mode(const token *tk)
 			break;
 		default:
 			{
-				//Act as if an end tag with the tag name "colgroup" had been seen, 
-				//and then, if that token wasn't ignored, reprocess the current token.
-				if(strcmp(current_node->name, "html") == 0)
+				if(strcmp(current_node->name, "colgroup") != 0)
 				{
-					;//ignore the imagined end tag token "colgroup"
+					//parse error, ignore the token
+					parse_error(UNEXPECTED_END_OF_FILE, line_number);
 				}
 				else
 				{
@@ -8410,7 +7661,7 @@ void in_column_group_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_table_body_mode(const token *tk)
+void in_table_body_mode(token *tk)
 { 
 	if((tk->type == TOKEN_START_TAG) &&
 	   (strcmp(tk->stt.tag_name, "tr") == 0))
@@ -8547,7 +7798,7 @@ void in_table_body_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_row_mode(const token *tk)
+void in_row_mode(token *tk)
 {
 	if((tk->type == TOKEN_START_TAG) &&
 		((strcmp(tk->stt.tag_name, "th") == 0) ||
@@ -8689,7 +7940,7 @@ void in_row_mode(const token *tk)
  }
 
 /*------------------------------------------------------------------------------------*/
-void in_cell_mode(const token *tk)
+void in_cell_mode(token *tk)
 { 
 	if((tk->type == TOKEN_START_TAG) &&
 		((strcmp(tk->stt.tag_name, "caption") == 0) ||
@@ -8705,28 +7956,6 @@ void in_cell_mode(const token *tk)
 		element_node *match_node;
 		if(has_element_in_table_scope(o_e_stack, "td", &match_node) == 1) 
 		{
-			//add text node to table cell
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-
-			
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
 			//close the cell and reprocess the current token.
 			pop_elements_up_to(&o_e_stack, "td");
 			current_node = open_element_stack_top(o_e_stack);
@@ -8740,28 +7969,6 @@ void in_cell_mode(const token *tk)
 		}
 		else if(has_element_in_table_scope(o_e_stack, "th", &match_node) == 1) 
 		{
-			//add text node to table cell
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-
-				
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
 			//close the cell and reprocess the current token.
 			pop_elements_up_to(&o_e_stack, "th");
 			current_node = open_element_stack_top(o_e_stack);
@@ -8777,15 +7984,6 @@ void in_cell_mode(const token *tk)
 			//parse error, ignore the token.
 			parse_error(UNEXPECTED_START_TAG, line_number);
 
-			//tag token is ignored, there may be more text after the ignored token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
-
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8795,28 +7993,6 @@ void in_cell_mode(const token *tk)
 		element_node *match_node;
 		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			//add text node to table cell
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-
-
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
 			//generate implied end tags
 			current_node = generate_implied_end_tags(&o_e_stack, NULL);
 
@@ -8840,14 +8016,6 @@ void in_cell_mode(const token *tk)
 			//parse error, ignore the token
 			parse_error(UNEXPECTED_END_TAG, line_number);
 
-			//tag token is ignored, there may be more text after the ignored token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
 		}
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
@@ -8860,14 +8028,6 @@ void in_cell_mode(const token *tk)
 		//parse error, ignore the token
 		parse_error(UNEXPECTED_END_TAG, line_number);
 
-		//tag token is ignored, there may be more text after the ignored token
-		//copy text_chunk from file buffer to text_buffer:
-		if((text_chunk != NULL) && (text_char_count > 0))
-		{
-			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-		text_chunk = NULL;
-		text_char_count = 0;
 	}
 	else if((tk->type == TOKEN_END_TAG) &&
 			((strcmp(tk->ett.tag_name, "table") == 0) ||
@@ -8879,28 +8039,6 @@ void in_cell_mode(const token *tk)
 		element_node *match_node;
 		if(has_element_in_table_scope(o_e_stack, tk->ett.tag_name, &match_node) == 1) 
 		{
-			//add text node to table cell
-			if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-			{
-				text_node *t = (text_node *)current_node->last_child;
-
-				//copy text_chunk from file buffer to text_buffer:
-				if((text_chunk != NULL) && (text_char_count > 0))
-				{
-					text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-				}
-				text_chunk = NULL;
-				text_char_count = 0;
-
-
-				if(text_buffer != NULL)
-				{
-					t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-					free(text_buffer);
-					text_buffer = NULL;
-				}
-			}
-
 			//close the cell and reprocess the current token.
 			if(has_element_in_table_scope(o_e_stack, "td", &match_node) == 1) 
 			{
@@ -8924,14 +8062,6 @@ void in_cell_mode(const token *tk)
 			//parse error, ignore the token
 			parse_error(UNEXPECTED_END_TAG, line_number);
 
-			//tag token is ignored, there may be more text after the ignored token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
 		}
 
 	}
@@ -8943,46 +8073,34 @@ void in_cell_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_select_mode(const token *tk)
+void in_select_mode(token *tk)
 {
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
-					;
+					text_node *t = (text_node *)current_node->last_child;
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
 				}
 				else
 				{
-					text_node *t = create_text_node();		//create text node with empty string as data.
+					text_node *t = create_text_node();
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
 					add_child_node(current_node, (node *)t);
-				}	
+				}
+
 			}
 			break;
 		case TOKEN_COMMENT:
 			{
 				comment_node *c;
-
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
 
 				c = create_comment_node(tk->cmt.comment);
 				add_child_node(current_node, (node *)c);	
@@ -8993,51 +8111,9 @@ void in_select_mode(const token *tk)
 			//ignore the token
 			parse_error(UNEXPECTED_DOCTYPE, line_number);
 
-			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-			}
 			break;
 		case TOKEN_START_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{
 					//Process the token using the rules for the "in body " insertion mode .
@@ -9130,41 +8206,11 @@ void in_select_mode(const token *tk)
 				{
 					//parse error, ignore the token
 					parse_error(UNEXPECTED_START_TAG, line_number);
-
-					//assign the text_data back to text_buffer and set text_data to empty string.
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						text_node *t = (text_node *)current_node->last_child;
-
-						text_buffer = t->text_data;
-						t->text_data = string_append(NULL, '\0');
-					}
 				}
 			}
 			break;
 		case TOKEN_END_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if(strcmp(tk->ett.tag_name, "optgroup") == 0)
 				{
 					element_node *current_node_parent = (element_node *)current_node->parent;
@@ -9186,14 +8232,6 @@ void in_select_mode(const token *tk)
 						//parse error, ignore the token
 						parse_error(UNEXPECTED_END_TAG, line_number);
 
-						//assign the text_data back to text_buffer and set text_data to empty string.
-						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-						{
-							text_node *t = (text_node *)current_node->last_child;
-
-							text_buffer = t->text_data;
-							t->text_data = string_append(NULL, '\0');
-						}
 					}
 				}
 				else if(strcmp(tk->ett.tag_name, "option") == 0)
@@ -9207,15 +8245,6 @@ void in_select_mode(const token *tk)
 					{
 						//parse error, ignore the token
 						parse_error(UNEXPECTED_END_TAG, line_number);
-
-						//assign the text_data back to text_buffer and set text_data to empty string.
-						if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-						{
-							text_node *t = (text_node *)current_node->last_child;
-
-							text_buffer = t->text_data;
-							t->text_data = string_append(NULL, '\0');
-						}
 					}
 
 				}
@@ -9245,16 +8274,6 @@ void in_select_mode(const token *tk)
 				{
 					//parse error, ignore the token
 					parse_error(UNEXPECTED_END_TAG, line_number);
-
-					//assign the text_data back to text_buffer and set text_data to empty string.
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						text_node *t = (text_node *)current_node->last_child;
-
-						text_buffer = t->text_data;
-						t->text_data = string_append(NULL, '\0');
-					}
-
 				}
 			}
 			break;
@@ -9277,7 +8296,7 @@ void in_select_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_select_in_table_mode(const token *tk)
+void in_select_in_table_mode(token *tk)
 { 
 	if((tk->type == TOKEN_START_TAG) &&
 	   ((strcmp(tk->stt.tag_name, "caption") == 0) ||
@@ -9336,13 +8355,6 @@ void in_select_in_table_mode(const token *tk)
 		else
 		{
 			//ignore the token
-			//copy text_chunk from file buffer to text_buffer:
-			if((text_chunk != NULL) && (text_char_count > 0))
-			{
-				text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-			}
-			text_chunk = NULL;
-			text_char_count = 0;
 		}
 	}
 	else
@@ -9354,13 +8366,13 @@ void in_select_in_table_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void in_template_mode(const token *tk)
+void in_template_mode(token *tk)
 {
 	switch(tk->type)
 	{
 		case TOKEN_CHARACTER:
 			{
-				in_body_mode(tk);
+				;
 			}
 
 			break;
@@ -9372,82 +8384,18 @@ void in_template_mode(const token *tk)
 			break;
 		case TOKEN_COMMENT:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
 				in_body_mode(tk);
 			}
 
 			break;
 		case TOKEN_DOCTYPE:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
 				in_body_mode(tk);
 			}
 
 			break;
 		case TOKEN_START_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if((strcmp(tk->stt.tag_name, "base") == 0) ||
 				   (strcmp(tk->stt.tag_name, "basefont") == 0) ||
 				   (strcmp(tk->stt.tag_name, "bgsound") == 0) ||
@@ -9516,28 +8464,6 @@ void in_template_mode(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if(strcmp(tk->ett.tag_name, "template") == 0)
 				{
 					in_head_mode(tk);
@@ -9585,23 +8511,36 @@ void in_template_mode(const token *tk)
 
 
 /*------------------------------------------------------------------------------------*/
-void after_body_mode(const token *tk)
+void after_body_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-			
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
+				;
+			}
+
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				long i;
+
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
-					//Process the token using the rules for the "in body " insertion mode.
-					in_body_mode(tk);
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
 				}
-				else
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
 				{
 					//parse error
 					parse_error(UNEXPECTED_TEXT, line_number);
@@ -9609,7 +8548,12 @@ void after_body_mode(const token *tk)
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
-
+					
+				}
+				else	//all characters are space characters
+				{
+					//Process the token using the rules for the "in body " insertion mode.
+					in_body_mode(tk);
 				}
 			}
 
@@ -9626,27 +8570,6 @@ void after_body_mode(const token *tk)
 					add_child_node(html_node, (node *)c);
 				}
 
-
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
 			}
 			break;
 		case TOKEN_DOCTYPE:
@@ -9655,49 +8578,10 @@ void after_body_mode(const token *tk)
 			{
 				parse_error(UNEXPECTED_DOCTYPE, line_number);
 
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
 			}
 			break;
 		case TOKEN_START_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{					
 					//Process the token using the rules for the "in body " insertion mode
@@ -9716,26 +8600,6 @@ void after_body_mode(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
 				if(strcmp(tk->ett.tag_name, "html") == 0)
 				{
 					//If the parser was originally created as part of the HTML fragment parsing algorithm, 
@@ -9770,15 +8634,19 @@ void after_body_mode(const token *tk)
 
 
 /*------------------------------------------------------------------------------------*/
-void in_frameset_mode(const token *tk)
+void in_frameset_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				parse_error(UNEXPECTED_TEXT, line_number);
 				//parse error, ignore the token
-				text_chunk = NULL;
-				text_char_count = 0;
 			}
 			break;
 		case TOKEN_COMMENT:
@@ -9874,11 +8742,16 @@ void in_frameset_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_frameset_mode(const token *tk)
+void after_frameset_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
+			{
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
 			{
 				//parse error, ignore the token
 				parse_error(UNEXPECTED_TEXT, line_number);
@@ -9937,30 +8810,50 @@ void after_frameset_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_after_body_mode(const token *tk)
+void after_after_body_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-			
-				if((tk->cht.ch == CHARACTER_TABULATION) ||
-				   (tk->cht.ch == LINE_FEED) ||
-				   (tk->cht.ch == FORM_FEED) ||
-				   (tk->cht.ch == CARRIAGE_RETURN) ||
-				   (tk->cht.ch == SPACE))
+				;
+			}
+
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				long i;
+
+				//leading space characters are to be ignored.
+				for(i = 0; i < tk->mcht.char_count; i++)
 				{
-					//Process the token using the rules for the "in body " insertion mode
-					in_body_mode(tk);
+					//find the first non-space character in the text.
+					if ((*(tk->mcht.mch + i) != CHARACTER_TABULATION) &&
+                        (*(tk->mcht.mch + i) != LINE_FEED) &&
+                        (*(tk->mcht.mch + i) != FORM_FEED) &&
+						(*(tk->mcht.mch + i) != CARRIAGE_RETURN) &&
+						(*(tk->mcht.mch + i) != SPACE))
+					{
+						break;
+					}
 				}
-				else
+
+				//if there are non-space characters in the text
+				if(i < tk->mcht.char_count)
 				{
 					//parse error
 					parse_error(UNEXPECTED_TEXT, line_number);
+
 					//Switch the insertion mode to "in body" and reprocess the token.
 					current_mode = IN_BODY;
 					token_process = REPROCESS;
+					
 				}
+				else	//all characters are space characters
+				{
+					//Process the token using the rules for the "in body " insertion mode.
+					in_body_mode(tk);
+				}		
 			}
 
 			break;
@@ -9971,75 +8864,15 @@ void after_after_body_mode(const token *tk)
 				comment_node *c = create_comment_node(tk->cmt.comment);
 				add_child_node(doc_root, (node *)c);
 
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
 			}
 			break;
 		case TOKEN_DOCTYPE:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
 				in_body_mode(tk);
 			}
 			break;
 		case TOKEN_START_TAG:
 			{
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if(strcmp(tk->stt.tag_name, "html") == 0)
 				{					
 					//Process the token using the rules for the "in body " insertion mode
@@ -10061,27 +8894,6 @@ void after_after_body_mode(const token *tk)
 			{
 				parse_error(UNEXPECTED_END_TAG, line_number);
 
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				current_mode = IN_BODY;
 				token_process = REPROCESS;
 			}
@@ -10099,11 +8911,16 @@ void after_after_body_mode(const token *tk)
 }
 
 /*------------------------------------------------------------------------------------*/
-void after_after_frameset_mode(const token *tk)
+void after_after_frameset_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
+			{
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
 			{
 				//parse error, ignore the token
 				parse_error(UNEXPECTED_TEXT, line_number);
@@ -10301,75 +9118,27 @@ insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name
 
 
 /*------------------------------------------------------------------------------------*/
-void parse_token_in_foreign_content(const token *tk)
+void parse_token_in_foreign_content(token *tk)
 {
 	switch (tk->type) 
 	{
 		case TOKEN_CHARACTER:
 			{
-				if(tk->cht.ch == NULL_CHARACTER)
+				;
+			}
+			break;
+		case TOKEN_MULTI_CHAR:
+			{
+				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
 				{
-					//Parse error. Insert a U+FFFD REPLACEMENT CHARACTER character into the current node.
-					unsigned char byte_seq[5];
-
-					parse_error(NULL_CHARACTER_IN_TEXT, line_number);
-
-					utf8_byte_sequence(0xFFFD, byte_seq);
-					
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						;
-					}
-					else
-					{
-						text_node *t = create_text_node();		//create text node with empty string as data.
-						add_child_node(current_node, (node *)t);
-					}
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-
-					//append replacement character U+FFFD to the text_buffer
-					text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
-
-				}
-				else if((tk->cht.ch == CHARACTER_TABULATION) ||
-						(tk->cht.ch == LINE_FEED) ||
-						(tk->cht.ch == FORM_FEED) ||
-						(tk->cht.ch == CARRIAGE_RETURN) ||
-						(tk->cht.ch == SPACE))
-				{
-					//insert the character into the current node
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						;
-					}
-					else
-					{
-						text_node *t = create_text_node();		//create text node with empty string as data.
-						add_child_node(current_node, (node *)t);
-					}
-
+					text_node *t = (text_node *)current_node->last_child;
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
 				}
 				else
 				{
-					//Insert the token's character into the current node .
-					//Set the frameset-ok flag to "not ok".
-					if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-					{
-						;
-					}
-					else
-					{
-						text_node *t = create_text_node();		//create text node with empty string as data.
-						add_child_node(current_node, (node *)t);
-					}
-
+					text_node *t = create_text_node();
+					t->text_data = string_n_append(t->text_data, tk->mcht.mch, tk->mcht.char_count);
+					add_child_node(current_node, (node *)t);
 				}
 			}
 			break;
@@ -10378,26 +9147,6 @@ void parse_token_in_foreign_content(const token *tk)
 				//Append a Comment node to the current node with the data attribute set to the data given in the comment token.
 				comment_node *c;
 
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-					
 				c = create_comment_node(tk->cmt.comment);
 				add_child_node(current_node, (node *)c);
 			}
@@ -10407,50 +9156,10 @@ void parse_token_in_foreign_content(const token *tk)
 				//parse error, ignore the token
 				parse_error(UNEXPECTED_DOCTYPE, line_number);
 
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
 			}
 			break;
 		case TOKEN_START_TAG:
 		    {
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if((strcmp(tk->stt.tag_name, "b") == 0) ||
 				   (strcmp(tk->stt.tag_name, "big") == 0) ||
 				   (strcmp(tk->stt.tag_name, "blockquote") == 0) ||
@@ -10648,28 +9357,6 @@ void parse_token_in_foreign_content(const token *tk)
 			break;
 		case TOKEN_END_TAG:
 			{
-
-				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-				{
-					text_node *t = (text_node *)current_node->last_child;
-
-					//copy text_chunk from file buffer to text_buffer:
-					if((text_chunk != NULL) && (text_char_count > 0))
-					{
-						text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-					}
-					text_chunk = NULL;
-					text_char_count = 0;
-					
-					if(text_buffer != NULL)
-					{
-						t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-						free(text_buffer);
-						text_buffer = NULL;
-					}
-				}
-
-
 				if(strcmp(tk->ett.tag_name, "script") == 0)
 				{
 					if((current_node->name_space == SVG) &&
@@ -10752,24 +9439,11 @@ void parse_token_in_foreign_content(const token *tk)
 /*------------------------------------------------------------------------------------*/
 void process_trailing_text(void)
 {
-	if((current_node != NULL) && (current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
-	{
-		text_node *t = (text_node *)current_node->last_child;
 
-		//copy text_chunk from file buffer to text_buffer:
-		if((text_chunk != NULL) && (text_char_count > 0))
-		{
-			text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-		}
-		text_chunk = NULL;
-		text_char_count = 0;
-					
-		if(text_buffer != NULL)
-		{
-			t->text_data = string_n_append(t->text_data, text_buffer, strlen(text_buffer));
-			free(text_buffer);
-			text_buffer = NULL;
-		}
+	if(multi_char != NULL)
+	{
+		process_token(multi_char);
+		multi_char = NULL;
 	}
 
 }
@@ -10821,6 +9495,8 @@ void process_token(token *tk)
 /*------------------------------------------------------------------------------------*/
 void process_eof(void)
 {
+	//process trailing text
+	process_trailing_text();
 
 	switch(current_state)
 	{
@@ -10842,35 +9518,20 @@ void process_eof(void)
 		case CHARACTER_REFERENCE_IN_DATA_STATE:
 		case CHARACTER_REFERENCE_IN_RCDATA_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//append the ampersand(&) to the text_buffer
-				text_buffer = string_append(text_buffer, AMPERSAND);
-				//have a text node created if not yet created
-				process_token(create_character_token(AMPERSAND));
+				process_token(create_multi_char_token("&", 1));
 			}
 			break;
 		case RCDATA_LESS_THAN_SIGN_STATE:
 		case RAWTEXT_LESS_THAN_SIGN_STATE:
 		case SCRIPT_DATA_LESS_THAN_SIGN_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
-				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
-				//have a text node created if not yet created
-				process_token(create_character_token(LESS_THAN_SIGN));
+				process_token(create_multi_char_token("<", 1));
 			}
 			break;
 		case TAG_OPEN_STATE:
 		case SCRIPT_DATA_ESCAPED_LESS_THAN_SIGN_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
-				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
-				//have a text node created if not yet created
-				process_token(create_character_token(LESS_THAN_SIGN));
+				process_token(create_multi_char_token("<", 1));
 				//parse error
 				parse_error(UNEXPECTED_END_OF_FILE, line_number);
 			}
@@ -10879,27 +9540,13 @@ void process_eof(void)
 		case RAWTEXT_END_TAG_OPEN_STATE:
 		case SCRIPT_DATA_END_TAG_OPEN_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
-				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
-				//add the '/' to the text_buffer.
-				text_buffer = string_append(text_buffer, SOLIDUS);
-				//have a text node created if not yet created
-				process_token(create_character_token(LESS_THAN_SIGN));
+				process_token(create_multi_char_token("</", 2));
 			}
 			break;
 		case END_TAG_OPEN_STATE:
 		case SCRIPT_DATA_ESCAPED_END_TAG_OPEN_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
-				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
-				//add the '/' to the text_buffer.
-				text_buffer = string_append(text_buffer, SOLIDUS);
-				//have a text node created if not yet created
-				process_token(create_character_token(LESS_THAN_SIGN));
+				process_token(create_multi_char_token("</", 2));
 				//parse error
 				parse_error(UNEXPECTED_END_OF_FILE, line_number);
 			}
@@ -10908,49 +9555,17 @@ void process_eof(void)
 		case RAWTEXT_END_TAG_NAME_STATE:
 		case SCRIPT_DATA_END_TAG_NAME_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
-				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
-				//add the '/' to the text_buffer.
-				text_buffer = string_append(text_buffer, SOLIDUS);
-				//append the temporary buffer to the text_buffer
-				if(temp_buf != NULL)
-				{
-					long len = strlen(temp_buf);
-					text_buffer = string_n_append(text_buffer, temp_buf, len);
-
-					free(temp_buf);
-					temp_buf = NULL;
-				}
-				//have a text node created if not yet created 
-				process_token(create_character_token(LESS_THAN_SIGN));
-
+				process_token(create_multi_char_token(&file_buf[(buffer_len - end_tag_name_len - 2)],
+														(end_tag_name_len + 2)));
 			}
 			break;
 		case SCRIPT_DATA_ESCAPED_END_TAG_NAME_STATE:
 			{
-				//copy text_chunk from file buffer to text_buffer:
-				copy_text_chunk();
-				//add the '<' to the text_buffer (text_buffer will be processed by process_trailing_text()).
-				text_buffer = string_append(text_buffer, LESS_THAN_SIGN);
-				//add the '/' to the text_buffer.
-				text_buffer = string_append(text_buffer, SOLIDUS);
-				//append the temporary buffer to the text_buffer
-				if(temp_buf != NULL)
-				{
-					long len = strlen(temp_buf);
-					text_buffer = string_n_append(text_buffer, temp_buf, len);
-
-					free(temp_buf);
-					temp_buf = NULL;
-				}
-				//have a text node created if not yet created 
-				process_token(create_character_token(LESS_THAN_SIGN));
-
 				//parse error
 				parse_error(UNEXPECTED_END_OF_FILE, line_number);
 
+				process_token(create_multi_char_token(&file_buf[(buffer_len - end_tag_name_len - 2)],
+														(end_tag_name_len + 2)));
 			}
 			break;
 		case SCRIPT_DATA_ESCAPE_START_STATE:
@@ -11067,11 +9682,12 @@ void process_eof(void)
 			break;
 	}
 
+	//process trailing comment.
+	process_trailing_comment();
+
 	process_token(create_eof_token());
 
-	//there may be trailing text, or trailing comment. But not both.
-	process_trailing_text();
-	process_trailing_comment();
+
 }
 
 
@@ -11104,46 +9720,23 @@ void process_trailing_comment(void)
 				add_child_node(current_node, (node *)c);
 			}
 		}
+
+		free_token(curr_token);
+		curr_token = NULL;
 	}
 }
 
 /*------------------------------------------------------------------------------------*/
-void copy_text_chunk(void)
-{
-	if((text_chunk != NULL) && (text_char_count > 0))
-	{
-		text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-	}
-
-	text_chunk = NULL;
-	text_char_count = 0;
-}
 /*------------------------------------------------------------------------------------*/
 void append_null_replacement(void)
 {
 	unsigned char byte_seq[5];
 
-	if((text_chunk != NULL) && (text_char_count > 0))	//there is text before the null character
-	{
-		//copy the text from file buffer to text_buffer:
-		text_buffer = string_n_append(text_buffer, text_chunk, text_char_count);
-	}
-
-	text_chunk = NULL;
-	text_char_count = 0;
-
-	//append replacement char(0xFFFD) to text_buffer
 	utf8_byte_sequence(0xFFFD, byte_seq);
 
-	text_buffer = string_n_append(text_buffer, byte_seq, strlen(byte_seq));
-
-	//this is only useful and necessary if the NULL char is the first char of the text node.
-	//if the NULL char is NOT the first char of the text node, the returned tokens will be ignored.
-	process_token(create_character_token(byte_seq[0]));
+	process_token(create_multi_char_token(byte_seq, strlen(byte_seq)));
 
 }
-
-
 
 /*------------------------------------------------------------------------------------*/
 void append_null_replacement_for_attribute_value(void)
