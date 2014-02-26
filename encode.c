@@ -1690,8 +1690,6 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 
 			*output_buffer = verify_utf8_encoding(input_buffer, input_buffer_length, output_length);
 
-			return 1;
-			
 		}
 		else
 		{
@@ -1700,15 +1698,17 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 			//try convert encoding_in_meta to UTF-8
 			if(convert_to_utf8(input_buffer, input_buffer_length, encoding_in_meta, output_buffer, output_length) == 1)
 			{
-				return 1;
+				;
 			}
 			else	//conversion failed because encoding_in_meta is not supported, try "cp1252". 
 			{	
 				convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
-
-				return 1;
 			}
+
 		}
+
+		free(encoding_in_meta);
+		return 1;
 	}
 }
 
