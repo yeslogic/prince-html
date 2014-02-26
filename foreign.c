@@ -197,14 +197,14 @@ int parsing_token_in_html_content(element_node *current_node, const token *tk)
 		((tk->type == TOKEN_START_TAG) && ((strcmp(tk->stt.tag_name, "mglyph") != 0) && 
 										   (strcmp(tk->stt.tag_name, "malignmark") != 0)))) 
 	   ||
-	   ((is_mathml_text_integration_point(current_node) == 1) && (tk->type == TOKEN_CHARACTER))
+	   ((is_mathml_text_integration_point(current_node) == 1) && (tk->type == TOKEN_MULTI_CHAR))
 	   ||
 	   ((current_node->name_space == MATHML) && (strcmp(current_node->name, "annotation-xml") == 0) &&
 	    ((tk->type == TOKEN_START_TAG) && (strcmp(tk->stt.tag_name, "svg") == 0)))
 	   ||
 	   ((is_html_integration_point(current_node) == 1) && (tk->type == TOKEN_START_TAG))
 	   ||
-	   ((is_html_integration_point(current_node) == 1) && (tk->type == TOKEN_CHARACTER))
+	   ((is_html_integration_point(current_node) == 1) && (tk->type == TOKEN_MULTI_CHAR))
 	   ||
 	   (tk->type == TOKEN_EOF))
 	{

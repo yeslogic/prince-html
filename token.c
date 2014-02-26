@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2014 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -61,16 +61,6 @@ token *create_comment_token(void)
 	return tk;
 }
 
-token *create_character_token(unsigned char ch)
-{
-	token *tk;
-	tk = malloc(sizeof(token));
-	
-	tk->type = TOKEN_CHARACTER;
-	tk->cht.ch = ch;
-
-	return tk;
-}
 
 token *create_multi_char_token(unsigned char *mch, long char_count)
 {
@@ -130,9 +120,6 @@ void free_token(token *tk)
 
 			case TOKEN_COMMENT:
 				free(tk->cmt.comment);
-				break;
-
-			case TOKEN_CHARACTER:
 				break;
 
 			case TOKEN_MULTI_CHAR:
@@ -504,12 +491,6 @@ void html_print_token(token *tk)
 		case TOKEN_COMMENT:
 			printf("Token type: COMMENT.\n");
 			printf("Comment: %s\n", tk->cmt.comment);
-			break;
-
-		case TOKEN_CHARACTER:
-			printf("Token type: CHARACTER.\n");
-			printf("Character: ");
-			putchar(tk->cht.ch);
 			break;
 
 		case TOKEN_MULTI_CHAR:

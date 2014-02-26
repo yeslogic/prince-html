@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2014 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -11,7 +11,6 @@ typedef struct doctype_token_s doctype_token;
 typedef struct start_tag_token_s start_tag_token;
 typedef struct end_tag_token_s end_tag_token;
 typedef struct comment_token_s comment_token;
-typedef struct character_token_s character_token;
 typedef struct multi_char_token_s multi_char_token;
 typedef struct token_s token;
 typedef struct token_list_s token_list;
@@ -23,7 +22,6 @@ typedef enum {
 	TOKEN_START_TAG,
 	TOKEN_END_TAG,
 	TOKEN_COMMENT,
-	TOKEN_CHARACTER,
 	TOKEN_MULTI_CHAR,
 	TOKEN_EOF
 } token_type;
@@ -79,10 +77,6 @@ struct comment_token_s {
 	unsigned char *comment;
 };
 
-struct character_token_s {
-	unsigned char ch;
-};
-
 struct multi_char_token_s {
 	unsigned char *mch;
 	long char_count;
@@ -95,7 +89,6 @@ struct token_s {
 	start_tag_token stt;
 	end_tag_token ett;
 	comment_token cmt;
-	character_token cht;
 	multi_char_token mcht;
 };
 
@@ -110,7 +103,6 @@ token *create_doctype_token(unsigned char ch);
 token *create_start_tag_token(unsigned char ch);
 token *create_end_tag_token(unsigned char ch);
 token *create_comment_token(void);
-token *create_character_token(unsigned char ch);
 token *create_multi_char_token(unsigned char *mch, long char_count);
 token *create_eof_token(void);
 

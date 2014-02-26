@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2014 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -8,25 +8,6 @@
 #include <assert.h>
 #include "misc.h"
 #include "util.h"
-
-
-/*-----------------------------------------------------------------*/		
-token_list *replacement_for_null_char(void)
-{
-	token_list *tk_list;
-	unsigned char byte_seq[5];
-	int i, len;
-
-	utf8_byte_sequence(0xFFFD, byte_seq);
-	len = strlen(byte_seq);
-	tk_list = NULL;
-	for(i = 0; i < len; i++)
-	{
-		tk_list = html_token_list_cons(create_character_token(byte_seq[i]), tk_list);
-	}
-	
-	return tk_list;
-}
 
 
 /*-----------------------------------------------------------------*/	

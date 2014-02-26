@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2014 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -6,7 +6,6 @@
 #include "stack.h"
 
 
-token_list *replacement_for_null_char(void);
 
 int has_element_in_scope(element_stack *st, unsigned char *element_name, element_node **match_node);
 int has_element_in_list_item_scope(element_stack *st, unsigned char *element_name, element_node **match_node);

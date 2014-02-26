@@ -581,8 +581,8 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 /*----------------- end of initialization ------------------------------*/
 
 
-	//create a DOCTYPE token object
-	doc_type = malloc(sizeof(token));
+	//set doc_type to NULL
+	doc_type = NULL;
 
 
 	//if there is a UTF-8 Byte Order Mark, skip it.
@@ -4318,11 +4318,6 @@ void initial_mode(token *tk)
 {
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				long i;
@@ -4403,11 +4398,6 @@ void before_html_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				element_node *e;
@@ -4529,11 +4519,6 @@ void before_head_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				element_node *e;
@@ -4669,11 +4654,6 @@ void in_head_mode(token *tk)
 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				long i;
@@ -4948,11 +4928,6 @@ void in_head_noscript_mode(token *tk)
 {
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				long i;
@@ -5081,11 +5056,6 @@ void after_head_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				element_node *e;
@@ -5289,12 +5259,6 @@ void in_body_mode(token *tk)
 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
-
 		case TOKEN_MULTI_CHAR:
 			{
 				if(is_in_a_script_data_parsing_state())
@@ -6918,11 +6882,6 @@ void text_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:	
 			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -6969,11 +6928,6 @@ void in_table_mode(token *tk)
 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				original_insertion_mode = current_mode;
@@ -7294,11 +7248,8 @@ void in_table_text_mode(token *tk)
 	long i, pending_chars_len;
 	text_node *t = NULL;
 
-	if(tk->type == TOKEN_CHARACTER)
-	{
-		;
-	}
-	else if(tk->type == TOKEN_MULTI_CHAR)
+
+	if(tk->type == TOKEN_MULTI_CHAR)
 	{
 		pending_table_characters = string_n_append(pending_table_characters, tk->mcht.mch, tk->mcht.char_count);
 	}
@@ -7497,11 +7448,6 @@ void in_column_group_mode(token *tk)
 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				long i;
@@ -8077,11 +8023,6 @@ void in_select_mode(token *tk)
 {
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
@@ -8370,12 +8311,6 @@ void in_template_mode(token *tk)
 {
 	switch(tk->type)
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				in_body_mode(tk);
@@ -8515,12 +8450,6 @@ void after_body_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				long i;
@@ -8638,11 +8567,6 @@ void in_frameset_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				parse_error(UNEXPECTED_TEXT, line_number);
@@ -8746,11 +8670,6 @@ void after_frameset_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				//parse error, ignore the token
@@ -8814,12 +8733,6 @@ void after_after_body_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				long i;
@@ -8915,11 +8828,6 @@ void after_after_frameset_mode(token *tk)
 { 
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				//parse error, ignore the token
@@ -9122,11 +9030,6 @@ void parse_token_in_foreign_content(token *tk)
 {
 	switch (tk->type) 
 	{
-		case TOKEN_CHARACTER:
-			{
-				;
-			}
-			break;
 		case TOKEN_MULTI_CHAR:
 			{
 				if((current_node->last_child != NULL) && (current_node->last_child->type == TEXT_N))
