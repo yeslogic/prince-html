@@ -1212,6 +1212,8 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token);
+			curr_token = NULL;
 		}
 	}
 	else if(c == SOLIDUS)
@@ -1233,6 +1235,8 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token);
+			curr_token = NULL;
 		}
 	}
 	else if(c == GREATER_THAN_SIGN)
@@ -1255,6 +1259,8 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token);
+			curr_token = NULL;
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
@@ -1279,6 +1285,8 @@ void rcdata_end_tag_name_state_s13(unsigned char *ch)
 		multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 		end_tag_name_len = 0;
 
+		free_token(curr_token);
+		curr_token = NULL;
 	}
 
 }
@@ -1371,6 +1379,8 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token);
+			curr_token = NULL;
 		}
 	}
 	else if(c == SOLIDUS)
@@ -1391,7 +1401,9 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
-		
+
+			free_token(curr_token);
+			curr_token = NULL;
 		}
 	}
 	else if(c == GREATER_THAN_SIGN)
@@ -1414,7 +1426,9 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
-			
+
+			free_token(curr_token);
+			curr_token = NULL;
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
@@ -1438,6 +1452,8 @@ void rawtext_end_tag_name_state_s16(unsigned char *ch)
 		multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 		end_tag_name_len = 0;
 
+		free_token(curr_token);
+		curr_token = NULL;
 	}
 
 }
@@ -1530,6 +1546,8 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token); 
+			curr_token = NULL;
 		}
 	}
 	else if(c == SOLIDUS)
@@ -1550,6 +1568,8 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token); 
+			curr_token = NULL;
 		}
 	}
 	else if(c == GREATER_THAN_SIGN)
@@ -1571,6 +1591,8 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 			multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 			end_tag_name_len = 0;
 
+			free_token(curr_token); 
+			curr_token = NULL;
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
@@ -1594,6 +1616,8 @@ void script_data_end_tag_name_state_s19(unsigned char *ch)
 		multi_char = create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2));
 		end_tag_name_len = 0;
 
+		free_token(curr_token); 
+		curr_token = NULL;
 	}
 
 }
@@ -1883,6 +1907,8 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 			process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
 			end_tag_name_len = 0;
 
+			free_token(curr_token); 
+			curr_token = NULL;
 		}
 	}
 	else if(c == SOLIDUS)
@@ -1905,6 +1931,8 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 			process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
 			end_tag_name_len = 0;
 
+			free_token(curr_token); 
+			curr_token = NULL;
 		}
 
 	}
@@ -1929,6 +1957,8 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 			process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
 			end_tag_name_len = 0;
 
+			free_token(curr_token); 
+			curr_token = NULL;
 		}
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
@@ -1953,6 +1983,8 @@ void script_data_escaped_end_tag_name_state_s27(unsigned char *ch)
 		process_token(create_multi_char_token((ch - 2 - end_tag_name_len), (end_tag_name_len + 2)));
 		end_tag_name_len = 0;
 
+		free_token(curr_token); 
+		curr_token = NULL;
 	}
 
 }
@@ -4361,7 +4393,9 @@ void initial_mode(token *tk)
 			{
 				doc_type = create_doctype_token('\0');
 
+				free(doc_type->dt.doctype_name);
 				doc_type->dt.doctype_name = strdup(tk->dt.doctype_name);
+
 				if(tk->dt.doctype_public_identifier == NULL)
 				{
 					doc_type->dt.doctype_public_identifier = NULL;
@@ -9296,6 +9330,8 @@ void parse_token_in_foreign_content(token *tk)
 						{
 							pop_ele_up_to(&o_e_stack, temp_element);
 							current_node = open_element_stack_top(o_e_stack);
+
+							free(lowercase_tag_name);
 							break;
 						}
 						else
@@ -9318,6 +9354,8 @@ void parse_token_in_foreign_content(token *tk)
 									current_node = open_element_stack_top(o_e_stack);
 
 									token_process = REPROCESS;
+
+									free(lowercase_tag_name);
 									return;
 								}
 							}
