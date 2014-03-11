@@ -1810,6 +1810,7 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 						*output_length = (output_buf_len - max_bytes_out);
 						*output_buffer = temp_output_buf;
 
+						iconv_close(conv_dscrtor);
 						return 1;
 
 					}

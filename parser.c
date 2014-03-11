@@ -5376,6 +5376,9 @@ void in_body_mode(token *tk)
 							}
 						}
 					}
+					//free the attribute list on the token
+					free_attributes(tk->stt.attributes);
+					tk->stt.attributes = NULL;
 					
 				}
 				else if((strcmp(tk->stt.tag_name, "base") == 0) ||
@@ -5399,11 +5402,30 @@ void in_body_mode(token *tk)
 					//or if there is a template element on the stack of open elements, 
 					//then ignore the token. (fragment case)
 
+					//get second element on the stack:
+					element_stack *temp_stack = o_e_stack;
+					element_node *second_element;
+
+					second_element = NULL;
+					while(temp_stack != NULL)
+					{
+						if((temp_stack->tail != NULL) && (temp_stack->tail->tail == NULL))
+						{
+							//this is the second element from the bottom of the stack
+							second_element = temp_stack->e ;
+						}
+						temp_stack = temp_stack->tail ;
+					}
+					//second_element could be NULL here.
+
+
 					if(((o_e_stack != NULL) && (o_e_stack->tail == NULL)) 
+					   ||
+					   ((second_element != NULL) && (strcmp(second_element->name, "body") != 0))
 					   ||
 					   (get_node_by_name(o_e_stack, "template") != NULL))
 					{
-						;	//ignore the token
+						;	//ignore the token, fragment case or in a template.
 					}
 					else
 					{
@@ -5420,7 +5442,7 @@ void in_body_mode(token *tk)
 						{
 							while(curr_token_attrs != NULL)
 							{
-								//if attribute on token is not already present in html_node->attributes:
+								//if attribute on token is not already present in body_node->attributes:
 								if((curr_token_attrs->name != NULL) && (attribute_name_in_list(curr_token_attrs->name, body_node->attributes) == 0))
 								{
 									body_node->attributes = html_attribute_list_cons(curr_token_attrs->name, 
@@ -5433,6 +5455,9 @@ void in_body_mode(token *tk)
 							}
 						}
 					}
+					//free the attribute list on the token
+					free_attributes(tk->stt.attributes);
+					tk->stt.attributes = NULL;
 
 				}
 				else if(strcmp(tk->stt.tag_name, "frameset") == 0)
