@@ -7356,6 +7356,7 @@ void in_table_text_mode(token *tk)
 				{
 					text_node *t_node = (text_node *)current_node->last_child;
 					t_node->text_data = string_n_append(t_node->text_data, pending_table_characters, pending_chars_len);
+					free_node((node *)t);
 				}
 				else
 				{
