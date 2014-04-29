@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 #include "parser.h"
 #include "util.h"
 #include "format.h"
@@ -3169,7 +3170,6 @@ void self_closing_start_tag_state_s43(unsigned char *ch, parser_variables *pv)
 /*----------------------------------------------------------------------------*/
 void bogus_comment_state_s44(unsigned char *ch, parser_variables *pv)
 {
-	unsigned char c = *ch;
 	unsigned char byte_seq[5];
 	long curr_buf_index = pv->curr_buffer_index;
 	int len, i, j;
