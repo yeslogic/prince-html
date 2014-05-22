@@ -380,6 +380,7 @@ struct parser_variables_s {
 	token_process_type token_process;
 	token *curr_token;
 	token *multi_char;
+	token *comment_chunk;
 	unsigned char *curr_attr_name;
 	unsigned char *curr_attr_value;
 	unsigned char *last_start_tag_name;
@@ -559,6 +560,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 
 	pv->curr_token = NULL;
 	pv->multi_char = NULL;
+	pv->comment_chunk = NULL;
 	pv->curr_attr_name = NULL;
 	pv->curr_attr_value = NULL;
 	pv->last_start_tag_name = NULL;
@@ -3172,21 +3174,17 @@ void bogus_comment_state_s44(unsigned char *ch, parser_variables *pv)
 {
 	unsigned char byte_seq[5];
 	long curr_buf_index = pv->curr_buffer_index;
-	int len, i, j;
+	int j;
 
 
 	utf8_byte_sequence(0xFFFD, byte_seq);
-	len = strlen(byte_seq);
 
 	pv->curr_token = create_comment_token();
 
 	//include the character before the current one in the comment
 	if(*(ch - 1) == NULL_CHARACTER)		
 	{
-		for(i = 0; i < len; i++)
-		{
-			pv->curr_token->cmt.comment = string_append(pv->curr_token->cmt.comment, byte_seq[i]);
-		}
+		pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 	}
 	else if(*(ch - 1) == GREATER_THAN_SIGN)
 	{
@@ -3205,6 +3203,7 @@ void bogus_comment_state_s44(unsigned char *ch, parser_variables *pv)
 
 	//start adding characters in the comment
 	j = 0;
+	pv->comment_chunk = NULL;
 	while((curr_buf_index + j) <= (pv->buffer_len - 1))
 	{
 		if(*(ch + j) == GREATER_THAN_SIGN)
@@ -3214,14 +3213,28 @@ void bogus_comment_state_s44(unsigned char *ch, parser_variables *pv)
 
 		if(*(ch + j) == NULL_CHARACTER)
 		{
-			for(i = 0; i < len; i++)
+			if(pv->comment_chunk != NULL)
 			{
-				pv->curr_token->cmt.comment = string_append(pv->curr_token->cmt.comment, byte_seq[i]);
+				pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, 
+															  pv->comment_chunk->mcht.mch,
+															  pv->comment_chunk->mcht.char_count);
+				free_token(pv->comment_chunk);
+				pv->comment_chunk = NULL;
 			}
+
+			pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, byte_seq, strlen(byte_seq));
 		}
 		else
 		{
-			pv->curr_token->cmt.comment = string_append(pv->curr_token->cmt.comment, *(ch + j));
+			//pv->curr_token->cmt.comment = string_append(pv->curr_token->cmt.comment, *(ch + j));
+			if(pv->comment_chunk == NULL)
+			{
+				pv->comment_chunk = create_multi_char_token((ch + j), 1);
+			}
+			else
+			{
+				pv->comment_chunk->mcht.char_count += 1;
+			}
 
 			if(*(ch + j) == LINE_FEED)
 			{
@@ -3232,8 +3245,17 @@ void bogus_comment_state_s44(unsigned char *ch, parser_variables *pv)
 		j += 1;
 	}
 
-	pv->character_skip = j;
+	if(pv->comment_chunk != NULL)
+	{
+		pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, 
+													  pv->comment_chunk->mcht.mch,
+													  pv->comment_chunk->mcht.char_count);
+		free_token(pv->comment_chunk);
+		pv->comment_chunk = NULL;
+	}
 
+
+	pv->character_skip = j;
 	pv->current_state = DATA_STATE;
 
 	
@@ -3249,6 +3271,7 @@ void markup_declaration_open_state_s45(unsigned char *ch, parser_variables *pv)
 	{
 		pv->character_skip = 1;
 		pv->curr_token = create_comment_token();
+		pv->comment_chunk = NULL;
 		pv->current_state = COMMENT_START_STATE;
 	}
 	else if(((pv->curr_buffer_index + 6) <= (pv->buffer_len - 1)) && 
@@ -3387,6 +3410,15 @@ void comment_state_s48(unsigned char *ch, parser_variables *pv)
 	if( c == HYPHEN_MINUS)
 	{
 		pv->current_state = COMMENT_END_DASH_STATE;
+		
+		if(pv->comment_chunk != NULL)
+		{
+			pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, 
+														  pv->comment_chunk->mcht.mch,
+														  pv->comment_chunk->mcht.char_count);
+			free_token(pv->comment_chunk);
+			pv->comment_chunk = NULL;
+		}
 	}
 	else if( c == NULL_CHARACTER)
 	{
@@ -3395,6 +3427,16 @@ void comment_state_s48(unsigned char *ch, parser_variables *pv)
 		//parse error
 		parse_error(NULL_CHARACTER_IN_TEXT, pv->line_number);
 
+		//append comment_chunk to the comment token
+		if(pv->comment_chunk != NULL)
+		{
+			pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, 
+														  pv->comment_chunk->mcht.mch,
+														  pv->comment_chunk->mcht.char_count);
+			free_token(pv->comment_chunk);
+			pv->comment_chunk = NULL;
+		}
+
 		//append replacement character U+FFFD to the comment data
 		utf8_byte_sequence(0xFFFD, byte_seq);
 		pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, byte_seq, strlen(byte_seq));
@@ -3402,7 +3444,16 @@ void comment_state_s48(unsigned char *ch, parser_variables *pv)
 	}
 	else
 	{
-		pv->curr_token->cmt.comment = string_append(pv->curr_token->cmt.comment, c);
+		//pv->curr_token->cmt.comment = string_append(pv->curr_token->cmt.comment, c);
+
+		if(pv->comment_chunk == NULL)
+		{
+			pv->comment_chunk = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			pv->comment_chunk->mcht.char_count += 1;
+		}
 	}
 
 }
@@ -9661,7 +9712,18 @@ void process_trailing_comment(parser_variables *pv)
 {
 	if((pv->curr_token != NULL) && (pv->curr_token->type == TOKEN_COMMENT))
 	{
-		comment_node *c = create_comment_node(pv->curr_token->cmt.comment);
+		comment_node *c;
+
+		if(pv->comment_chunk != NULL)
+		{
+			pv->curr_token->cmt.comment = string_n_append(pv->curr_token->cmt.comment, 
+														  pv->comment_chunk->mcht.mch,
+														  pv->comment_chunk->mcht.char_count);
+			free_token(pv->comment_chunk);
+			pv->comment_chunk = NULL;
+		}
+
+		c = create_comment_node(pv->curr_token->cmt.comment);
 
 		if((pv->current_mode == INITIAL) ||
 		   (pv->current_mode == BEFORE_HTML) ||
