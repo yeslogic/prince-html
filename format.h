@@ -40,6 +40,7 @@ active_formatting_list *remove_bookmark_from_active_formatting_list(active_forma
 int element_compare(element_node *e1, element_node *e2);
 int is_open_element(element_stack *st, element_node *e);
 void print_active_formatting_list(active_formatting_list *list);
+void free_formatting_list(active_formatting_list *list);
  
 element_node *get_furthest_block(element_stack *o_e_st, element_node *formatting_ele);
 

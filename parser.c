@@ -422,6 +422,7 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "math", MATHML, root_ptr);
 
+	free(file_buffer);
 
 	return 1;
 }
@@ -634,6 +635,17 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 
 	process_eof(pv);
 
+	/*----------free resources------------*/
+	free_formatting_list(pv->active_formatting_elements);
+	free_element_stack(pv->o_e_stack);
+	
+	//free incomplete and unprocessed start tag token or end tag token
+	if((pv->curr_token != NULL) && (pv->curr_token->type == TOKEN_START_TAG))
+	{
+		free_attributes(pv->curr_token->stt.attributes);
+	}
+	free_token(pv->curr_token);
+	/*----------free resources------------*/
 }
 
 

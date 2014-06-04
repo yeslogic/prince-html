@@ -49,3 +49,6 @@ void replace_element_in_stack(element_stack *st, element_node *e, element_node *
 /*insert element e into the stack immediately below element existing_e*/
 /*if existing_e in not in stack, then e will not be inserted at all*/
 void insert_into_stack_below_element(element_stack **st, element_node *e, element_node *existing_e);
+
+/*free the stack of open elements*/
+void free_element_stack(element_stack *st);

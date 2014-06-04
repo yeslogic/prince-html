@@ -457,6 +457,18 @@ void print_active_formatting_list(active_formatting_list *list)
 	}
 }
 
+void free_formatting_list(active_formatting_list *list)
+{
+	active_formatting_list *temp_ptr;
+
+	while(list != NULL)
+	{
+		temp_ptr = list;	
+		list = list->tail;
+		free(temp_ptr);
+	}
+}
+
 /*-----------------------------------------------------------------------------------------*/
 
 //the furthest block is the topmost node in the stack of open elements that is lower in

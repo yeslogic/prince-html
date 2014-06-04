@@ -53,6 +53,21 @@ int open_element_stack_pop(element_stack **st)
 	}
 }
 
+
+/*free the stack of open elements*/
+void free_element_stack(element_stack *st)
+{
+	element_stack *temp_ptr;
+
+	while(st != NULL)
+	{
+		temp_ptr = st;
+		st = st->tail;
+
+		free(temp_ptr);
+	}
+}
+
 /*pop elements off the stack up to and including the element named element_name.*/
 /*element_name must not be NULL. All elements will be popped off if no element on stack with that name*/
 /*caller must check that name against stack before calling*/
