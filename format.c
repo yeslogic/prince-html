@@ -294,12 +294,14 @@ active_formatting_list *remove_element_from_active_formatting_list(active_format
 						temp_list->tail->head = temp_list->head;
 					}
 
+					free(temp_list);
+
 					return list;	//just return the origianl list with the "element" removed
 				}
 			}
 			else
 			{
-				temp_list = temp_list->tail;	//keep going doen the list.
+				temp_list = temp_list->tail;	//keep going down the list.
 			}
 		}
 	}

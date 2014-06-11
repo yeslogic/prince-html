@@ -638,6 +638,7 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 	/*----------free resources------------*/
 	free_formatting_list(pv->active_formatting_elements);
 	free_element_stack(pv->o_e_stack);
+	free_mode_stack(pv->m_stack);
 	
 	//free incomplete and unprocessed start tag token or end tag token
 	if((pv->curr_token != NULL) && (pv->curr_token->type == TOKEN_START_TAG))
@@ -645,6 +646,12 @@ void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element
 		free_attributes(pv->curr_token->stt.attributes);
 	}
 	free_token(pv->curr_token);
+
+	free(pv->curr_attr_name);
+	free(pv->curr_attr_value);
+	free(pv->last_start_tag_name);
+	free(pv->pending_table_characters);
+	free(pv->temp_tag_name);
 	/*----------free resources------------*/
 }
 
@@ -1072,7 +1079,6 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			//when determining whether an end tag is appropriate
 			
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 
 		}
@@ -2276,7 +2282,6 @@ void before_attribute_name_state_s34(unsigned char *ch, parser_variables *pv)
 			//when determining whether an end tag is appropriate
 			
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 		}
 
@@ -2392,7 +2397,6 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 			//when determining whether an end tag is appropriate
 
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 		}
 
@@ -2474,7 +2478,6 @@ void after_attribute_name_state_s36(unsigned char *ch, parser_variables *pv)
 			//when determining whether an end tag is appropriate
 
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 		}
 
@@ -2661,7 +2664,6 @@ void before_attribute_value_state_s37(unsigned char *ch, parser_variables *pv)
 			//when determining whether an end tag is appropriate
 
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 		}
 
@@ -2856,7 +2858,6 @@ void attribute_value_unquoted_state_s40(unsigned char *ch, parser_variables *pv)
 			//when determining whether an end tag is appropriate
 			
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 		}
 
@@ -3054,7 +3055,6 @@ void after_attribute_value_quoted_state_s42(unsigned char *ch, parser_variables 
 			//make record of start tag name, for use later,
 			//when determining whether an end tag is appropriate
 			free(pv->last_start_tag_name);
-			pv->last_start_tag_name = NULL;
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
 		}
 

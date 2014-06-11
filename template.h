@@ -54,3 +54,7 @@ int mode_stack_is_empty(mode_stack *mst);
   caller needs to make sure mst is not empty.
 */
 insertion_mode mode_stack_top(mode_stack *mst);
+
+
+/*free the stack of insertion modes*/
+void free_mode_stack(mode_stack *mst);

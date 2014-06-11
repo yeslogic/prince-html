@@ -36,7 +36,7 @@ int mode_stack_pop(mode_stack **mst)
 }
 
 
-//returns 1 is stack is empty, otherwise returns 0
+/*returns 1 is stack is empty, otherwise returns 0  */
 int mode_stack_is_empty(mode_stack *mst)
 {
 	if(mst == NULL)
@@ -50,9 +50,24 @@ int mode_stack_is_empty(mode_stack *mst)
 }
 
 
-//return the top item in the mode_stack. 
-//caller needs to make sure mst is not empty
+/*return the top item in the mode_stack. 
+  caller needs to make sure mst is not empty.*/
 insertion_mode mode_stack_top(mode_stack *mst)
 {
 	return mst->m;
+}
+
+
+/*free the stack of insertion modes */
+void free_mode_stack(mode_stack *mst)
+{
+	mode_stack *temp_ptr;
+
+	while(mst != NULL)
+	{
+		temp_ptr = mst;
+		mst = mst->tail;
+
+		free(temp_ptr);
+	}
 }
