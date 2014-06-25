@@ -665,22 +665,10 @@ void data_state_s1(unsigned char *ch, parser_variables *pv)
 
 	if(c == AMPERSAND)
 	{
-		if(pv->multi_char != NULL)
-		{
-			process_token(pv->multi_char, pv);	
-			pv->multi_char = NULL;
-		}
-
 		pv->current_state = CHARACTER_REFERENCE_IN_DATA_STATE;
 	}
 	else if( c == LESS_THAN_SIGN)
 	{
-		if(pv->multi_char != NULL)
-		{
-			process_token(pv->multi_char, pv);		
-			pv->multi_char = NULL;
-		}
-
 		pv->current_state = TAG_OPEN_STATE;
 	}
 	else if( c == NULL_CHARACTER)
@@ -733,14 +721,26 @@ void character_reference_in_data_state_s2(unsigned char *ch, parser_variables *p
 		pv->character_consumption = RECONSUME;
 
 		//not a character reference, so treat it as normal text.
-		//create a pv->multi_char starting at '&'
-		pv->multi_char = create_multi_char_token((ch - 1), 1);
-
-		return;
+		//create a pv->multi_char starting at '&', or include '&' in the current multi_char.
+		//pv->multi_char = create_multi_char_token((ch - 1), 1);
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token((ch - 1), 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
 		
 	}
 	else
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);	
+			pv->multi_char = NULL;
+		}
+
 		pv->multi_char = create_multi_char_token(char_ref, strlen(char_ref));
 		process_token(pv->multi_char, pv);	
 		pv->multi_char = NULL;
@@ -748,7 +748,6 @@ void character_reference_in_data_state_s2(unsigned char *ch, parser_variables *p
 		pv->character_skip = chars_consumed - 1;
 
 		free(char_ref);
-		return;
 	}
 }
 
@@ -759,22 +758,10 @@ void rcdata_state_s3(unsigned char *ch, parser_variables *pv)
 
 	if(c == AMPERSAND)
 	{
-		if(pv->multi_char != NULL)
-		{
-			process_token(pv->multi_char, pv);		
-			pv->multi_char = NULL;
-		}
-
 		pv->current_state = CHARACTER_REFERENCE_IN_RCDATA_STATE;
 	}
 	else if(c == LESS_THAN_SIGN)
 	{	
-		if(pv->multi_char != NULL)
-		{
-			process_token(pv->multi_char, pv);		
-			pv->multi_char = NULL;
-		}
-
 		pv->current_state = RCDATA_LESS_THAN_SIGN_STATE;
 	}
 	else if(c == NULL_CHARACTER)
@@ -823,11 +810,26 @@ void character_reference_in_rcdata_state_s4(unsigned char *ch, parser_variables 
 	{
 		pv->character_consumption = RECONSUME;
 
-		pv->multi_char = create_multi_char_token((ch - 1), 1);
+		//pv->multi_char = create_multi_char_token((ch - 1), 1);
+		//start a multi_char token from '&', or include '&' in the current multi_char.
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token((ch - 1), 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
 
 	}
 	else	
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		pv->multi_char = create_multi_char_token(char_ref, strlen(char_ref));
 		process_token(pv->multi_char, pv);
 		pv->multi_char = NULL;
@@ -847,12 +849,6 @@ void rawtext_state_s5(unsigned char *ch, parser_variables *pv)
 
 	if(c == LESS_THAN_SIGN)
 	{
-		if(pv->multi_char != NULL)
-		{
-			process_token(pv->multi_char, pv);		
-			pv->multi_char = NULL;
-		}
-
 		pv->current_state = RAWTEXT_LESS_THAN_SIGN_STATE;
 	}
 	else if(c == NULL_CHARACTER)
@@ -892,13 +888,8 @@ void script_data_state_s6(unsigned char *ch, parser_variables *pv)
 
 	if(c == LESS_THAN_SIGN)
 	{
-		if(pv->multi_char != NULL)
-		{
-			process_token(pv->multi_char, pv);	
-			pv->multi_char = NULL;
-		}
-
 		pv->current_state = SCRIPT_DATA_LESS_THAN_SIGN_STATE;
+
 	}
 	else if(c == NULL_CHARACTER)
 	{
@@ -971,14 +962,32 @@ void tag_open_state_s8(unsigned char *ch, parser_variables *pv)
 
 	if(c == EXCLAMATION_MARK)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		pv->current_state = MARKUP_DECLARATION_OPEN_STATE;
 	}
 	else if(c == SOLIDUS)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		pv->current_state = END_TAG_OPEN_STATE;
 	}
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		c = c + CAPITAL_TO_SMALL;
 
 		pv->curr_token = create_start_tag_token(c);
@@ -987,12 +996,24 @@ void tag_open_state_s8(unsigned char *ch, parser_variables *pv)
 	}
 	else if((c >= SMALL_A) && (c <= SMALL_Z))
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		pv->curr_token = create_start_tag_token(c);
 
 		pv->current_state = TAG_NAME_STATE;
 	}
 	else if(c == QUESTION_MARK)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		//parse error
 		parse_error(BOGUS_COMMENT, pv->line_number);
 		pv->current_state = BOGUS_COMMENT_STATE;
@@ -1007,8 +1028,16 @@ void tag_open_state_s8(unsigned char *ch, parser_variables *pv)
 
 
 		//not a valid tag, or comment, or DOCTYPE. Treat it as text.
-		//create a pv->multi_char starting at '<'
-		pv->multi_char = create_multi_char_token((ch - 1), 1);
+		//create a pv->multi_char starting at '<', or include '<' in the current multi_char.
+		//pv->multi_char = create_multi_char_token((ch - 1), 1);
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token((ch - 1), 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
 
 	}
 
@@ -1155,6 +1184,12 @@ void rcdata_less_than_sign_state_s11(unsigned char *ch, parser_variables *pv)
 	
 	if (c == SOLIDUS)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		pv->end_tag_name_len = 0;
 
 		pv->current_state = RCDATA_END_TAG_OPEN_STATE;
@@ -1165,7 +1200,16 @@ void rcdata_less_than_sign_state_s11(unsigned char *ch, parser_variables *pv)
 		pv->character_consumption = RECONSUME;
 
 		//not an end tag, so treat it as text.
-		pv->multi_char = create_multi_char_token((ch - 1), 1);
+		//start a multi_char from '<', or include '<' in the current multi_char.
+		//pv->multi_char = create_multi_char_token((ch - 1), 1);
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token((ch - 1), 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
 
 	}
 
@@ -1318,6 +1362,12 @@ void rawtext_less_than_sign_state_s14(unsigned char *ch, parser_variables *pv)
 
 	if(c == SOLIDUS)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);		
+			pv->multi_char = NULL;
+		}
+
 		pv->end_tag_name_len = 0;
 		pv->current_state = RAWTEXT_END_TAG_OPEN_STATE;
 	}
@@ -1328,7 +1378,16 @@ void rawtext_less_than_sign_state_s14(unsigned char *ch, parser_variables *pv)
 
 
 		//not an end tag, so treat it as text.
-		pv->multi_char = create_multi_char_token((ch - 1), 1);
+		//pv->multi_char = create_multi_char_token((ch - 1), 1);
+		//start a multi_char token from '<', or include the '<' in the current multi_char.
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token((ch - 1), 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
 
 	}
 
@@ -1485,11 +1544,23 @@ void script_data_less_than_sign_state_s17(unsigned char *ch, parser_variables *p
 
 	if(c == SOLIDUS)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);	
+			pv->multi_char = NULL;
+		}
+
 		pv->end_tag_name_len = 0;
 		pv->current_state = SCRIPT_DATA_END_TAG_OPEN_STATE;
 	}
 	else if(c == EXCLAMATION_MARK)
 	{
+		if(pv->multi_char != NULL)
+		{
+			process_token(pv->multi_char, pv);	
+			pv->multi_char = NULL;
+		}
+
 		pv->current_state = SCRIPT_DATA_ESCAPE_START_STATE;
 
 		process_token(create_multi_char_token("<!", 2), pv);
@@ -1499,9 +1570,19 @@ void script_data_less_than_sign_state_s17(unsigned char *ch, parser_variables *p
 	{
 		pv->character_consumption = RECONSUME;
 		pv->current_state = SCRIPT_DATA_STATE;
-	
-		process_token(create_multi_char_token("<", 1), pv);
 
+		//start multi_char from '<',
+		//or include '<' in the current multi_char.
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token((ch - 1), 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
+	
+		//process_token(create_multi_char_token("<", 1), pv);
 	}
 
 }
