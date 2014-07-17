@@ -1088,6 +1088,43 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 	//character tabulation, line feed, form feed, space
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
+		if(pv->curr_token->type == TOKEN_START_TAG)
+		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->stt.tag_name = string_n_append(pv->curr_token->stt.tag_name,
+															   pv->multi_char->mcht.mch,
+															   pv->multi_char->mcht.char_count);
+
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+			}
+			
+			//convert all uppercase characters in the start tag name to lowercase.
+			strlwr(pv->curr_token->stt.tag_name);
+			
+		}
+		else if(pv->curr_token->type == TOKEN_END_TAG)
+		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->ett.tag_name  = string_n_append(pv->curr_token->ett.tag_name,
+																pv->multi_char->mcht.mch,
+																pv->multi_char->mcht.char_count);
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+
+			}
+			
+			//convert all uppercase characters in the end tag name to lowercase.
+			strlwr(pv->curr_token->ett.tag_name);
+			
+		}
+		else
+		{
+			;
+		}
+
 		free(pv->curr_attr_name);
 		free(pv->curr_attr_value);
 		pv->curr_attr_name = NULL;
@@ -1097,6 +1134,48 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 	else if(c == SOLIDUS)
 	{
 		pv->current_state = SELF_CLOSING_START_TAG_STATE;
+
+		if(pv->curr_token->type == TOKEN_START_TAG)
+		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->stt.tag_name = string_n_append(pv->curr_token->stt.tag_name,
+															   pv->multi_char->mcht.mch,
+															   pv->multi_char->mcht.char_count);
+
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+			}
+			
+			//convert all uppercase characters in the start tag name to lowercase.
+			strlwr(pv->curr_token->stt.tag_name);
+
+			//make record of start tag name, for use later,
+			//when determining whether an end tag is appropriate
+			free(pv->last_start_tag_name);
+			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
+			
+		}
+		else if(pv->curr_token->type == TOKEN_END_TAG)
+		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->ett.tag_name  = string_n_append(pv->curr_token->ett.tag_name,
+																pv->multi_char->mcht.mch,
+																pv->multi_char->mcht.char_count);
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+
+			}
+			
+			//convert all uppercase characters in the end tag name to lowercase.
+			strlwr(pv->curr_token->ett.tag_name);
+			
+		}
+		else
+		{
+			;
+		}
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
@@ -1104,12 +1183,44 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 
 		if(pv->curr_token->type == TOKEN_START_TAG)
 		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->stt.tag_name = string_n_append(pv->curr_token->stt.tag_name,
+															   pv->multi_char->mcht.mch,
+															   pv->multi_char->mcht.char_count);
+
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+			}
+			
+			//convert all uppercase characters in the start tag name to lowercase.
+			strlwr(pv->curr_token->stt.tag_name);
+
 			//make record of start tag name, for use later,
 			//when determining whether an end tag is appropriate
-			
 			free(pv->last_start_tag_name);
 			pv->last_start_tag_name = strdup(pv->curr_token->stt.tag_name);
+			
+		}
+		else if(pv->curr_token->type == TOKEN_END_TAG)
+		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->ett.tag_name  = string_n_append(pv->curr_token->ett.tag_name,
+																pv->multi_char->mcht.mch,
+																pv->multi_char->mcht.char_count);
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
 
+			}
+			
+			//convert all uppercase characters in the end tag name to lowercase.
+			strlwr(pv->curr_token->ett.tag_name);
+			
+		}
+		else
+		{
+			;
 		}
 
 		process_token(pv->curr_token, pv);
@@ -1117,6 +1228,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 		return;
 
 	}
+	/*
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
@@ -1134,6 +1246,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			;
 		}
 	}
+	*/
 	else if(c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
@@ -1147,10 +1260,27 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 
 		if(pv->curr_token->type == TOKEN_START_TAG)
 		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->stt.tag_name = string_n_append(pv->curr_token->stt.tag_name,
+															   pv->multi_char->mcht.mch,
+															   pv->multi_char->mcht.char_count);
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+			}
 			pv->curr_token->stt.tag_name = string_n_append(pv->curr_token->stt.tag_name, byte_seq, strlen(byte_seq));
 		}
 		else if(pv->curr_token->type == TOKEN_END_TAG)
 		{
+			if(pv->multi_char != NULL)
+			{
+				pv->curr_token->ett.tag_name  = string_n_append(pv->curr_token->ett.tag_name,
+																pv->multi_char->mcht.mch,
+																pv->multi_char->mcht.char_count);
+				free_token(pv->multi_char);
+				pv->multi_char = NULL;
+
+			}
 			pv->curr_token->ett.tag_name = string_n_append(pv->curr_token->ett.tag_name, byte_seq, strlen(byte_seq));
 		}
 		else
@@ -1160,6 +1290,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 	}
 	else
 	{
+		/*
 		if(pv->curr_token->type == TOKEN_START_TAG)
 		{
 			pv->curr_token->stt.tag_name = string_append(pv->curr_token->stt.tag_name, c);
@@ -1171,6 +1302,15 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 		else
 		{
 			;
+		}
+		*/
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
 		}
 	}
 
@@ -2444,19 +2584,67 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 	//character tabulation, line feed, form feed, space
 	if((c == CHARACTER_TABULATION) || (c == LINE_FEED) || (c == FORM_FEED) ||(c == SPACE))
 	{
+		if(pv->multi_char != NULL)
+		{
+			pv->curr_attr_name = string_n_append(pv->curr_attr_name, 
+												 pv->multi_char->mcht.mch, 
+												 pv->multi_char->mcht.char_count);
+
+			free_token(pv->multi_char);
+			pv->multi_char = NULL;
+		}
+
+		strlwr(pv->curr_attr_name);
+
 		pv->current_state = AFTER_ATTRIBUTE_NAME_STATE;
 	}
 	else if(c == SOLIDUS)
 	{
+		if(pv->multi_char != NULL)
+		{
+			pv->curr_attr_name = string_n_append(pv->curr_attr_name, 
+												 pv->multi_char->mcht.mch, 
+												 pv->multi_char->mcht.char_count);
+
+			free_token(pv->multi_char);
+			pv->multi_char = NULL;
+		}
+
+		strlwr(pv->curr_attr_name);
+
 		pv->current_state = SELF_CLOSING_START_TAG_STATE;
 	}
 	else if(c == EQUALS_SIGN)
 	{
+		if(pv->multi_char != NULL)
+		{
+			pv->curr_attr_name = string_n_append(pv->curr_attr_name, 
+												 pv->multi_char->mcht.mch, 
+												 pv->multi_char->mcht.char_count);
+
+			free_token(pv->multi_char);
+			pv->multi_char = NULL;
+		}
+
+		strlwr(pv->curr_attr_name);
+
 		pv->current_state = BEFORE_ATTRIBUTE_VALUE_STATE;
 	}
 	else if(c == GREATER_THAN_SIGN)
 	{
 		pv->current_state = DATA_STATE;
+
+		if(pv->multi_char != NULL)
+		{
+			pv->curr_attr_name = string_n_append(pv->curr_attr_name, 
+												 pv->multi_char->mcht.mch, 
+												 pv->multi_char->mcht.char_count);
+
+			free_token(pv->multi_char);
+			pv->multi_char = NULL;
+		}
+
+		strlwr(pv->curr_attr_name);
 
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.
@@ -2485,11 +2673,13 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 		pv->curr_token = NULL;
 		return;
 	}
+	/*
 	else if((c >= CAPITAL_A) && (c <= CAPITAL_Z))
 	{
 		c = c + CAPITAL_TO_SMALL;
 		pv->curr_attr_name = string_append(pv->curr_attr_name, c);
 	}
+	*/
 	else if(c == NULL_CHARACTER)
 	{
 		unsigned char byte_seq[5];
@@ -2499,6 +2689,16 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 
 		utf8_byte_sequence(0xFFFD, byte_seq);
 
+		if(pv->multi_char != NULL)
+		{
+			pv->curr_attr_name = string_n_append(pv->curr_attr_name, 
+												 pv->multi_char->mcht.mch, 
+												 pv->multi_char->mcht.char_count);
+
+			free_token(pv->multi_char);
+			pv->multi_char = NULL;
+		}
+
 		pv->curr_attr_name = string_n_append(pv->curr_attr_name, byte_seq, strlen(byte_seq));
 		
 	}
@@ -2507,11 +2707,28 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 		//parse error
 		parse_error(BAD_CHARACTER_FOR_ATTRIBUTE_NAME, pv->line_number);
 
-		pv->curr_attr_name = string_append(pv->curr_attr_name, c);
+		//pv->curr_attr_name = string_append(pv->curr_attr_name, c);
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
+
 	}
 	else
 	{
-		pv->curr_attr_name = string_append(pv->curr_attr_name, c);
+		//pv->curr_attr_name = string_append(pv->curr_attr_name, c);
+		if(pv->multi_char == NULL)
+		{
+			pv->multi_char = create_multi_char_token(ch, 1);
+		}
+		else
+		{
+			pv->multi_char->mcht.char_count += 1;
+		}
 	}
 
 }
