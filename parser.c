@@ -1101,7 +1101,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			}
 			
 			//convert all uppercase characters in the start tag name to lowercase.
-			strlwr(pv->curr_token->stt.tag_name);
+			string_lower(pv->curr_token->stt.tag_name);
 			
 		}
 		else if(pv->curr_token->type == TOKEN_END_TAG)
@@ -1117,7 +1117,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			}
 			
 			//convert all uppercase characters in the end tag name to lowercase.
-			strlwr(pv->curr_token->ett.tag_name);
+			string_lower(pv->curr_token->ett.tag_name);
 			
 		}
 		else
@@ -1148,7 +1148,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			}
 			
 			//convert all uppercase characters in the start tag name to lowercase.
-			strlwr(pv->curr_token->stt.tag_name);
+			string_lower(pv->curr_token->stt.tag_name);
 
 			//make record of start tag name, for use later,
 			//when determining whether an end tag is appropriate
@@ -1169,7 +1169,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			}
 			
 			//convert all uppercase characters in the end tag name to lowercase.
-			strlwr(pv->curr_token->ett.tag_name);
+			string_lower(pv->curr_token->ett.tag_name);
 			
 		}
 		else
@@ -1194,7 +1194,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			}
 			
 			//convert all uppercase characters in the start tag name to lowercase.
-			strlwr(pv->curr_token->stt.tag_name);
+			string_lower(pv->curr_token->stt.tag_name);
 
 			//make record of start tag name, for use later,
 			//when determining whether an end tag is appropriate
@@ -1215,7 +1215,7 @@ void tag_name_state_s10(unsigned char *ch, parser_variables *pv)
 			}
 			
 			//convert all uppercase characters in the end tag name to lowercase.
-			strlwr(pv->curr_token->ett.tag_name);
+			string_lower(pv->curr_token->ett.tag_name);
 			
 		}
 		else
@@ -2594,7 +2594,7 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 			pv->multi_char = NULL;
 		}
 
-		strlwr(pv->curr_attr_name);
+		string_lower(pv->curr_attr_name);
 
 		pv->current_state = AFTER_ATTRIBUTE_NAME_STATE;
 	}
@@ -2610,7 +2610,7 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 			pv->multi_char = NULL;
 		}
 
-		strlwr(pv->curr_attr_name);
+		string_lower(pv->curr_attr_name);
 
 		pv->current_state = SELF_CLOSING_START_TAG_STATE;
 	}
@@ -2626,7 +2626,7 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 			pv->multi_char = NULL;
 		}
 
-		strlwr(pv->curr_attr_name);
+		string_lower(pv->curr_attr_name);
 
 		pv->current_state = BEFORE_ATTRIBUTE_VALUE_STATE;
 	}
@@ -2644,7 +2644,7 @@ void attribute_name_state_s35(unsigned char *ch, parser_variables *pv)
 			pv->multi_char = NULL;
 		}
 
-		strlwr(pv->curr_attr_name);
+		string_lower(pv->curr_attr_name);
 
 		//if the attribute name is not already in the attribute list, 
 		//then add the attribute(name, value pair) to the attribute list.

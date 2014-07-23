@@ -25,6 +25,10 @@ unsigned char *string_append(unsigned char *str, unsigned char ch);
   pre-condition: num <= length of str2 */
 unsigned char *string_n_append(unsigned char *str1, unsigned char *str2, long num);
 
+/*Converts any uppercase letters in str to lowercase.
+  The string str must be modifiable.*/
+void string_lower(unsigned char *str);
+
 /*returns pointer to buffer holding entire document, or NULL if unsuccessful*/
 unsigned char *read_file(unsigned char *file_name, long *length);
 

@@ -204,6 +204,26 @@ unsigned char *string_n_append(unsigned char *str1, unsigned char *str2, long nu
 	}
 }
 /*--------------------------------------------------------------*/
+/*Converts any uppercase letters in str to lowercase.
+  The string str must be modifiable.	
+*/
+void string_lower(unsigned char *str)
+{
+	long i, len;
+
+	if(str != NULL)
+	{
+		len = strlen(str);
+
+		for(i = 0; i < len; i++)
+		{
+			str[i] = tolower(str[i]);
+		}
+	}
+}
+
+
+/*--------------------------------------------------------------*/
 /*returns 1 if ch is a hex digit, otherwise return 0*/
 int is_hex_digit(unsigned char ch)
 {
