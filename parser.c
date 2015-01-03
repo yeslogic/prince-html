@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2014 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2015 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -241,8 +241,7 @@ void after_after_frameset_mode(token *tk, parser_variables *pv);
 void html_parse_memory_1(unsigned char *file_buffer, long buffer_length, element_node *starting_node,
 						 tokenization_state starting_state, insertion_mode starting_mode, parser_variables *pv);
 
-insertion_mode reset_insertion_mode(element_stack *st, parser_variables *pv);
-insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name, parser_variables *pv);
+insertion_mode reset_insertion_mode(parser_variables *pv);
 
 void parse_token_in_foreign_content(token *tk, parser_variables *pv);
 void process_trailing_text(parser_variables *pv);
@@ -418,7 +417,8 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	}
 
 
-	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
+	//html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
+	html_parse_memory_fragment(file_buffer, buffer_length, "div", MATHML, root_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "math", MATHML, root_ptr);
 
@@ -482,7 +482,7 @@ void html_parse_memory_fragment(unsigned char *string_buffer, long string_length
 		start_state = DATA_STATE;
 	}
 
-	start_mode = reset_insertion_mode_fragment(context, pv);
+	start_mode = reset_insertion_mode(pv);
 
 	//preprocessing input buffer, make LF the only character representing newlines.
 	preprocess_input(string_buffer, string_length, &string_length);
@@ -5283,7 +5283,7 @@ void in_head_mode(token *tk, parser_variables *pv)
 
 						mode_stack_pop(&pv->m_stack);
 
-						pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+						pv->current_mode = reset_insertion_mode(pv);
 
 					}
 				}
@@ -7463,7 +7463,7 @@ void in_table_mode(token *tk, parser_variables *pv)
 						pv->current_node = open_element_stack_top(pv->o_e_stack);
 
 						//Reset the insertion mode appropriately
-						pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+						pv->current_mode = reset_insertion_mode(pv);
 						pv->token_process = REPROCESS;
 					}
 					else
@@ -7588,7 +7588,7 @@ void in_table_mode(token *tk, parser_variables *pv)
 						pv->current_node = open_element_stack_top(pv->o_e_stack);
 
 						//Reset the insertion mode appropriately
-						pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+						pv->current_mode = reset_insertion_mode(pv);
 					}
 					else
 					{
@@ -8525,7 +8525,7 @@ void in_select_mode(token *tk, parser_variables *pv)
 						pv->current_node = open_element_stack_top(pv->o_e_stack);
 
 						//Reset the insertion mode appropriately.
-						pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+						pv->current_mode = reset_insertion_mode(pv);
 					}
 					else
 					{
@@ -8548,7 +8548,7 @@ void in_select_mode(token *tk, parser_variables *pv)
 						pv->current_node = open_element_stack_top(pv->o_e_stack);
 
 						//Reset the insertion mode appropriately.
-						pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+						pv->current_mode = reset_insertion_mode(pv);
 						pv->token_process = REPROCESS;
 					}
 					else
@@ -8617,7 +8617,7 @@ void in_select_mode(token *tk, parser_variables *pv)
 						pv->current_node = open_element_stack_top(pv->o_e_stack);
 
 						//Reset the insertion mode appropriately.
-						pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+						pv->current_mode = reset_insertion_mode(pv);
 					}
 					else
 					{
@@ -8680,7 +8680,7 @@ void in_select_in_table_mode(token *tk, parser_variables *pv)
 		}
 
 		//Reset the insertion mode appropriately.
-		pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+		pv->current_mode = reset_insertion_mode(pv);
 		pv->token_process = REPROCESS;
 
 	}
@@ -8708,7 +8708,7 @@ void in_select_in_table_mode(token *tk, parser_variables *pv)
 			}
 
 			//Reset the insertion mode appropriately.
-			pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+			pv->current_mode = reset_insertion_mode(pv);
 			pv->token_process = REPROCESS;
 			
 		}
@@ -8848,7 +8848,7 @@ void in_template_mode(token *tk, parser_variables *pv)
 
 					mode_stack_pop(&pv->m_stack);
 
-					pv->current_mode = reset_insertion_mode(pv->o_e_stack, pv);
+					pv->current_mode = reset_insertion_mode(pv);
 
 					pv->token_process = REPROCESS;
 				}
@@ -9301,21 +9301,74 @@ void after_after_frameset_mode(token *tk, parser_variables *pv)
 
 
 /*------------------------------------------------------------------------------------*/
-/*use this function in non-fragment cases*/
-insertion_mode reset_insertion_mode(element_stack *st, parser_variables *pv)
+insertion_mode reset_insertion_mode(parser_variables *pv)
 {
+	element_stack *st = pv->o_e_stack;
 	element_node *temp_element;
+	int last = 0;
 
 	while(st != NULL)
 	{
 		temp_element = open_element_stack_top(st);
 
+		//If node is the first node in the stack of open elements, then set last to true,
+		//note: in the spec, the "first node" in the stack means the bottom node in the stack.
+		if(is_last_element_in_stack(st, temp_element))
+		{
+			last = 1;
+		}
+
+		//if the parser was originally created as part of the HTML fragment parsing algorithm (fragment case),
+		//set node to the context element passed to that algorithm.
+		if(pv->context_node != NULL)
+		{
+			temp_element = pv->context_node;
+		}
+
+
+
 		if(strcmp(temp_element->name, "select") == 0)
 		{
+			if(last)
+			{
+				;
+			}
+			else
+			{
+				element_node *ancestor = temp_element;
+				element_stack *stk = pv->o_e_stack;
+
+				if(is_on_element_stack(stk, ancestor))
+				{
+					//loop until ancestor is the first node(bottom node) in the stack of open elements
+					while(!is_last_element_in_stack(stk, ancestor))
+					{
+						element_stack *temp_st = stack_node_before_element(stk, ancestor);
+						if(temp_st != NULL)
+						{
+							ancestor = temp_st->e;
+
+							if(strcmp(ancestor->name, "template") == 0)
+							{
+								break;
+							}	
+						
+							if(strcmp(ancestor->name, "table") == 0)
+							{
+								return IN_SELECT_IN_TABLE;
+							}
+						}
+					}
+				}
+			}
+
 			return IN_SELECT;
+
 		}
-		else if((strcmp(temp_element->name, "td") == 0) ||
+		else if(((strcmp(temp_element->name, "td") == 0) ||
 				(strcmp(temp_element->name, "th") == 0))
+				&& 
+				(!last))
 		{
 			return IN_CELL;
 		}
@@ -9356,7 +9409,7 @@ insertion_mode reset_insertion_mode(element_stack *st, parser_variables *pv)
 			//in the stack of open elements, pv->m_stack will never be
 			//NULL. But we do not want to risk it. So we test pv->m_stack for NULL to be safe.
 		}
-		else if(strcmp(temp_element->name, "head") == 0)
+		else if((strcmp(temp_element->name, "head") == 0) && (!last))
 		{
 			return IN_HEAD;
 		}
@@ -9370,11 +9423,23 @@ insertion_mode reset_insertion_mode(element_stack *st, parser_variables *pv)
 		}
 		else if(strcmp(temp_element->name, "html") == 0)
 		{
-			return BEFORE_HEAD;
+			if(pv->head_element_ptr == NULL)	//fragment case
+			{
+				return BEFORE_HEAD;
+			}
+			else
+			{
+				return AFTER_HEAD;
+			}
 		}
 		else
 		{
 			;
+		}
+
+		if(last)
+		{
+			return IN_BODY;
 		}
 
 		st = previous_stack_node(st);
@@ -9383,65 +9448,6 @@ insertion_mode reset_insertion_mode(element_stack *st, parser_variables *pv)
 	return IN_BODY;
 }
 
-/*------------------------------------------------------------------------------------*/
-/*use this function in fragment cases*/
-insertion_mode reset_insertion_mode_fragment(unsigned char *context_element_name, parser_variables *pv)
-{
-
-	if(strcmp(context_element_name, "select") == 0)
-	{
-		return IN_SELECT;
-	}
-	else if(strcmp(context_element_name, "tr") == 0)
-	{
-		return IN_ROW;
-	}
-	else if((strcmp(context_element_name, "tbody") == 0) ||
-			(strcmp(context_element_name, "thead") == 0) ||
-			(strcmp(context_element_name, "tfoot") == 0))
-	{
-		return IN_TABLE_BODY;
-	}
-	else if(strcmp(context_element_name, "caption") == 0)
-	{
-		return IN_CAPTION;
-	}
-	else if(strcmp(context_element_name, "colgroup") == 0)
-	{
-		return IN_COLUMN_GROUP;
-	}
-	else if(strcmp(context_element_name, "table") == 0)
-	{
-		return IN_TABLE;
-	}
-	else if(strcmp(context_element_name, "template") == 0)
-	{
-		mode_stack_push(&pv->m_stack, IN_TEMPLATE);
-		pv->current_template_insertion_mode = mode_stack_top(pv->m_stack);
-
-		return pv->current_template_insertion_mode;
-	}
-	else if(strcmp(context_element_name, "head") == 0)
-	{
-		return IN_BODY;
-	}
-	else if(strcmp(context_element_name, "body") == 0)
-	{
-		return IN_BODY;
-	}
-	else if(strcmp(context_element_name, "frameset") == 0)
-	{
-		return IN_FRAMESET;
-	}
-	else if(strcmp(context_element_name, "html") == 0)
-	{
-		return BEFORE_HEAD;
-	}
-	else
-	{
-		return IN_BODY;
-	}
-}
 
 
 /*------------------------------------------------------------------------------------*/

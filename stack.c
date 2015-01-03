@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2015 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -138,6 +138,25 @@ element_node *open_element_stack_top(element_stack *st)
 	{
 		return NULL;
 	}
+}
+
+
+/*returns 1 if e is in st AND is the last element in st, otherwise returns 0.*/  
+int is_last_element_in_stack(element_stack *st, element_node *e)
+{
+	assert(e != NULL);
+
+	while(st != NULL)
+	{
+		if((st->e == e) && (st->tail == NULL))
+		{
+			return 1;
+		}
+		
+		st = st->tail;
+	}
+
+	return 0;
 }
 
 

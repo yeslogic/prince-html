@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2015 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -19,6 +19,9 @@ void open_element_stack_push(element_stack **st, element_node *e);
 
 /*if element_stack is empty, return 0, otherwise pop the top element and return 1 */
 int open_element_stack_pop(element_stack **st);
+
+/*returns 1 if e is in st AND is the last element in st, otherwise returns 0.*/  
+int is_last_element_in_stack(element_stack *st, element_node *e);
 
 /*pop elements up to and including the element named element_name, or to the end of the stack*/
 void pop_elements_up_to(element_stack **st, unsigned char *element_name);
