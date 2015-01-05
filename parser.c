@@ -417,8 +417,8 @@ int html_parse_file(unsigned char *file_name, node **root_ptr, token **doctype_p
 	}
 
 
-	//html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
-	html_parse_memory_fragment(file_buffer, buffer_length, "div", MATHML, root_ptr);
+	html_parse_memory(file_buffer, buffer_length, root_ptr, doctype_ptr);
+	//html_parse_memory_fragment(file_buffer, buffer_length, "div", HTML, root_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "script", root_ptr);
 	//html_parse_memory_fragment(file_buffer, buffer_length, "math", MATHML, root_ptr);
 
@@ -9316,15 +9316,14 @@ insertion_mode reset_insertion_mode(parser_variables *pv)
 		if(is_last_element_in_stack(st, temp_element))
 		{
 			last = 1;
-		}
 
-		//if the parser was originally created as part of the HTML fragment parsing algorithm (fragment case),
-		//set node to the context element passed to that algorithm.
-		if(pv->context_node != NULL)
-		{
-			temp_element = pv->context_node;
+			//if the parser was originally created as part of the HTML fragment parsing algorithm (fragment case),
+			//set node to the context element passed to that algorithm.
+			if(pv->context_node != NULL)
+			{
+				temp_element = pv->context_node;
+			}
 		}
-
 
 
 		if(strcmp(temp_element->name, "select") == 0)
@@ -9338,25 +9337,22 @@ insertion_mode reset_insertion_mode(parser_variables *pv)
 				element_node *ancestor = temp_element;
 				element_stack *stk = pv->o_e_stack;
 
-				if(is_on_element_stack(stk, ancestor))
+				//loop until ancestor is the first node(bottom node) in the stack of open elements
+				while(!is_last_element_in_stack(stk, ancestor))
 				{
-					//loop until ancestor is the first node(bottom node) in the stack of open elements
-					while(!is_last_element_in_stack(stk, ancestor))
+					element_stack *temp_st = stack_node_before_element(stk, ancestor);
+					if(temp_st != NULL)
 					{
-						element_stack *temp_st = stack_node_before_element(stk, ancestor);
-						if(temp_st != NULL)
-						{
-							ancestor = temp_st->e;
+						ancestor = temp_st->e;
 
-							if(strcmp(ancestor->name, "template") == 0)
-							{
-								break;
-							}	
+						if(strcmp(ancestor->name, "template") == 0)
+						{
+							break;
+						}	
 						
-							if(strcmp(ancestor->name, "table") == 0)
-							{
-								return IN_SELECT_IN_TABLE;
-							}
+						if(strcmp(ancestor->name, "table") == 0)
+						{
+							return IN_SELECT_IN_TABLE;
 						}
 					}
 				}
