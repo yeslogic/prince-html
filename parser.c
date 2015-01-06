@@ -9309,11 +9309,14 @@ insertion_mode reset_insertion_mode(parser_variables *pv)
 
 	while(st != NULL)
 	{
+
 		temp_element = open_element_stack_top(st);
+
+		st = previous_stack_node(st);
 
 		//If node is the first node in the stack of open elements, then set last to true,
 		//note: in the spec, the "first node" in the stack means the bottom node in the stack.
-		if(is_last_element_in_stack(st, temp_element))
+		if(st == NULL)
 		{
 			last = 1;
 
@@ -9334,27 +9337,24 @@ insertion_mode reset_insertion_mode(parser_variables *pv)
 			}
 			else
 			{
-				element_node *ancestor = temp_element;
-				element_stack *stk = pv->o_e_stack;
+				element_node *ancestor;
 
 				//loop until ancestor is the first node(bottom node) in the stack of open elements
-				while(!is_last_element_in_stack(stk, ancestor))
+				while(st != NULL)
 				{
-					element_stack *temp_st = stack_node_before_element(stk, ancestor);
-					if(temp_st != NULL)
-					{
-						ancestor = temp_st->e;
+					ancestor = st->e;
 
-						if(strcmp(ancestor->name, "template") == 0)
-						{
-							break;
-						}	
+					if(strcmp(ancestor->name, "template") == 0)
+					{
+						break;
+					}	
 						
-						if(strcmp(ancestor->name, "table") == 0)
-						{
-							return IN_SELECT_IN_TABLE;
-						}
+					if(strcmp(ancestor->name, "table") == 0)
+					{
+						return IN_SELECT_IN_TABLE;
 					}
+
+					st = previous_stack_node(st);
 				}
 			}
 
@@ -9438,7 +9438,6 @@ insertion_mode reset_insertion_mode(parser_variables *pv)
 			return IN_BODY;
 		}
 
-		st = previous_stack_node(st);
 	}
 
 	return IN_BODY;
