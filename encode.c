@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012 YesLogic Pty. Ltd.
+// Copyright (C) 2011-2015 YesLogic Pty. Ltd.
 // Released as Open Source (see COPYING.txt for details)
 
 
@@ -101,6 +101,19 @@ unsigned char *get_encoding(unsigned char *file_buffer, long buffer_length)
 {
 	long buf_index;
 	
+	//check UTF-16 Byte Order Mark
+	if((buffer_length >= 2) && 
+	   ((file_buffer[0] == 0xFE) && (file_buffer[1] == 0xFF)))
+	{
+		return strdup("utf-16be");
+	}
+
+	if((buffer_length >= 2) && 
+	   ((file_buffer[0] == 0xFF) && (file_buffer[1] == 0xFE)))
+	{
+		return strdup("utf-16le");
+	}
+
 	//check utf-8 Byte Order Mark:
 	if((buffer_length >= 3) && 
 	   ((file_buffer[0] == 0xEF) && (file_buffer[1] == 0xBB) && (file_buffer[2] == 0xBF)))
@@ -1652,13 +1665,13 @@ int file_to_utf8(unsigned char *file_name, unsigned char **output_buffer, long *
 int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length, 
 				   unsigned char **output_buffer, long *output_length)
 {
-	unsigned char *encoding_in_meta;
+	unsigned char *encoding_found;
 
 	assert(input_buffer != NULL);
 	
-	encoding_in_meta = get_encoding(input_buffer, input_buffer_length);
+	encoding_found = get_encoding(input_buffer, input_buffer_length);
 
-	if(encoding_in_meta == NULL)
+	if(encoding_found == NULL)
 	{
 	
 		//check utf-8 encoding
@@ -1684,7 +1697,7 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 	else
 	{
 
-		if(strcasecmp(encoding_in_meta, "utf-8") == 0)
+		if(strcasecmp(encoding_found, "utf-8") == 0)
 		{
 			//verify utf-8
 
@@ -1695,19 +1708,19 @@ int memory_to_utf8(unsigned char *input_buffer, long input_buffer_length,
 		{
 			//convert to utf-8
 
-			//try convert encoding_in_meta to UTF-8
-			if(convert_to_utf8(input_buffer, input_buffer_length, encoding_in_meta, output_buffer, output_length) == 1)
+			//try convert encoding_found to UTF-8
+			if(convert_to_utf8(input_buffer, input_buffer_length, encoding_found, output_buffer, output_length) == 1)
 			{
 				;
 			}
-			else	//conversion failed because encoding_in_meta is not supported, try "cp1252". 
+			else	//conversion failed because encoding_found is not supported, try "cp1252". 
 			{	
 				convert_to_utf8(input_buffer, input_buffer_length, "cp1252", output_buffer, output_length);
 			}
 
 		}
 
-		free(encoding_in_meta);
+		free(encoding_found);
 		return 1;
 	}
 }
@@ -1886,3 +1899,6 @@ int convert_to_utf8(unsigned char *input_buffer, long input_buffer_length, unsig
 	return 1;
 	
 }
+
+
+
