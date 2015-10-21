@@ -263,7 +263,7 @@ void preprocess_input(unsigned char *buffer, long buf_len, long *new_len)
 	
 	shift_count = 0;
 
-	for(i = 0; i < buf_len; i++)
+	for(i = 0; i < (buf_len - shift_count); i++)
 	{
 		//there is a CR
 		if(buffer[i] == CARRIAGE_RETURN)
@@ -273,7 +273,7 @@ void preprocess_input(unsigned char *buffer, long buf_len, long *new_len)
 
 			//if that CR is followd by an LF, shift the text to the left by one byte to get rid of that LF.
 			//the text chunk to be shifted starts at [i+2] and ends at [buf_len - 1 - shift_count].
-			if(((i + 1) < buf_len) && (buffer[i + 1] == LINE_FEED))
+			if(((i + 1) < (buf_len - shift_count)) && (buffer[i + 1] == LINE_FEED))
 			{
 				if((i + 2) < (buf_len - shift_count))
 				{
@@ -283,11 +283,6 @@ void preprocess_input(unsigned char *buffer, long buf_len, long *new_len)
 				}
 			}
 				
-		}
-
-		if(i >= (buf_len - 1 - shift_count))
-		{
-			break;
 		}
 
 	}
