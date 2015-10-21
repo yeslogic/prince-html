@@ -258,71 +258,41 @@ int is_dec_digit(unsigned char ch)
 /*preprocess the input buffer of a document, new_len is the length of the buffer after being preprocessed*/
 void preprocess_input(unsigned char *buffer, long buf_len, long *new_len)
 {
-	long i, j, shift_len, num_bytes;
+	long i, shift_count;
 
 	
-	shift_len = 0;
+	shift_count = 0;
 
 	for(i = 0; i < buf_len; i++)
 	{
 		//there is a CR
 		if(buffer[i] == CARRIAGE_RETURN)
 		{	
-			//STEP 1:
+
 			buffer[i] = LINE_FEED;		//convert it to LF
 
-			//STEP 2:
-			//find the chunk of bytes:
-			//either up to the end of the buffer, or
-			//up to and including the next CR. if that CR is followed by an LF, include that LF.
-			//then shift that chunk of bytes to the left, by shift_len.
-
-			//if that CR is followd by an LF, increment shift_len
+			//if that CR is followd by an LF, shift the text to the left by one byte to get rid of that LF.
+			//the text chunk to be shifted starts at [i+2] and ends at [buf_len - 1 - shift_count].
 			if(((i + 1) < buf_len) && (buffer[i + 1] == LINE_FEED))
 			{
-				shift_len += 1;
-			}
-				
-
-			num_bytes = 0;
-			for(j = (i + shift_len + 1); j < buf_len; j++)
-			{
-			    num_bytes += 1;
-					
-				//byte chunk up to and including the next CR
-				if(buffer[j] == CARRIAGE_RETURN)
+				if((i + 2) < (buf_len - shift_count))
 				{
-					//check if next byte is an LF
-					if(((j + 1) < buf_len) && (buffer[j + 1] == LINE_FEED))
-					{
-						num_bytes += 1;		//include the LF in the chunk
-					}
-					break;
+					memmove(&buffer[i + 1], &buffer[i + 2], (buf_len - (i + 2) - shift_count));
+
+					shift_count += 1;
 				}
 			}
-
-			//shift the chunk to the left, only when num_bytes > 0, 
-			if(num_bytes == 0)	//no more bytes to shift, the end of the buffer
-			{
-				*new_len = buf_len - shift_len; 
-				return;
-			}
-			else
-			{
-				//shift the chunk of bytes to the left by shift_len.
-				memmove(&buffer[i + 1], &buffer[i + 1 + shift_len], num_bytes);
 				
-				//check if the chunk shifted was at the end of the buffer
-				if(j == buf_len)
-				{
-					*new_len = buf_len - shift_len; 
-					return;
-				}
-			}
+		}
+
+		if(i >= (buf_len - 1 - shift_count))
+		{
+			break;
 		}
 
 	}
-	*new_len = buf_len;
+
+	*new_len = buf_len - shift_count;
 }
 
 /*--------------------------------------------------------------*/
