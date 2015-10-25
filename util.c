@@ -254,41 +254,88 @@ int is_dec_digit(unsigned char ch)
 }
 
 
+
 /*--------------------------------------------------------------*/
 /*preprocess the input buffer of a document, new_len is the length of the buffer after being preprocessed*/
 void preprocess_input(unsigned char *buffer, long buf_len, long *new_len)
 {
-	long i, shift_count;
-
+	long i, j, shift_len, num_bytes;
+	int check_for_linefeed;
 	
-	shift_count = 0;
-
-	for(i = 0; i < (buf_len - shift_count); i++)
+	shift_len = 0;
+	check_for_linefeed = 1;		//initially, always check for LF.
+	for(i = 0; i < buf_len; i++)
 	{
 		//there is a CR
 		if(buffer[i] == CARRIAGE_RETURN)
 		{	
+			//STEP 1:  Convert the CR into LF
+			buffer[i] = LINE_FEED;
 
-			buffer[i] = LINE_FEED;		//convert it to LF
+			
+			//STEP 2:  Determine if the next byte is a LF and calculate the next chunk to shift forward.
 
-			//if that CR is followd by an LF, shift the text to the left by one byte to get rid of that LF.
-			//the text chunk to be shifted starts at [i+2] and ends at [buf_len - 1 - shift_count].
-			if(((i + 1) < (buf_len - shift_count)) && (buffer[i + 1] == LINE_FEED))
+			//Find the chunk of bytes:
+			//either up to the end of the buffer, or
+			//up to and including the next CR. If that CR is followed by an LF, include that LF,
+			//then shift that chunk of bytes to the left, by shift_len.
+
+			//check_for_linefeed is the flag that indicates whether there is a LF at the end 
+			//of the chunk that was shifted forward.
+			//If the CR at the current position is followd by an LF, increment shift_len.
+			//shift_len is essentially the number of LF's that have been found. It is also the number
+			//of bytes that have been vacated. So the next chunk of bytes will need to be shifted by
+			//the distance of shift_len.
+			if((check_for_linefeed) && 
+			   (((i + 1) < buf_len) && (buffer[i + 1] == LINE_FEED)))
 			{
-				if((i + 2) < (buf_len - shift_count))
-				{
-					memmove(&buffer[i + 1], &buffer[i + 2], (buf_len - (i + 2) - shift_count));
-
-					shift_count += 1;
-				}
+				shift_len += 1;
 			}
 				
+
+			check_for_linefeed = 0;
+			num_bytes = 0;
+			for(j = (i + shift_len + 1); j < buf_len; j++)
+			{
+			    num_bytes += 1;
+					
+				//byte chunk up to and including the next CR
+				if(buffer[j] == CARRIAGE_RETURN)
+				{
+					//check if next byte is an LF
+					if(((j + 1) < buf_len) && (buffer[j + 1] == LINE_FEED))
+					{
+						num_bytes += 1;		//include the LF in the chunk
+						check_for_linefeed = 1;
+					}
+					break;
+				}
+			}
+
+			//shift the chunk to the left, only when num_bytes > 0, 
+			if(num_bytes == 0)	//no more bytes to shift, the end of the buffer
+			{
+				*new_len = buf_len - shift_len; 
+				return;
+			}
+			else
+			{
+				//shift the chunk of bytes to the left by shift_len.
+				memmove(&buffer[i + 1], &buffer[i + 1 + shift_len], num_bytes);
+				
+				//check if the chunk shifted was at the end of the buffer
+				if(j == buf_len)
+				{
+					*new_len = buf_len - shift_len; 
+					return;
+				}
+			}
 		}
 
 	}
-
-	*new_len = buf_len - shift_count;
+	*new_len = buf_len;
 }
+
 
 /*--------------------------------------------------------------*/
 /*returns pointer to buffer holding entire document, or NULL if unsuccessful*/
